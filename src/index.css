@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@keyframes slow-pan {
+    0% {
+        background-position: 0% 50%;
+        transform: scale(1.05);
+    }
+    50% {
+        background-position: 100% 50%;
+        transform: scale(1.1);
+    }
+    100% {
+        background-position: 0% 50%;
+        transform: scale(1.05);
+    }
+
+}
+
+@keyframes slow-pan-reverse {
+    0% {
+        background-position: 100% 50%;
+        transform: scale(1.1);
+    }
+    50% {
+        background-position: 0% 50%;
+        transform: scale(1.12);
+    }
+    100% {
+        background-position: 100% 50%;
+        transform: scale(1.1);
+    }
+}
+
+.animate-slow-pan {
+    animation: slow-pan 45s linear infinite;
+}
+
+.animate-slow-pan-reverse {
+    animation: slow-pan-reverse 60s linear infinite;
+}
