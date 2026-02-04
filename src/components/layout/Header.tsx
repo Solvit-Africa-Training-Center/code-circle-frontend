@@ -15,19 +15,18 @@ export default function Header(){
     return(
         <header className="
             fixed top-0 z-50 w-full
-            h-16 md:h-20  
-            backdrop-blur-xl
-            
+            h-16 md:h-20
+            bg-slate-950/80 backdrop-blur-md border-b border-slate-800/50
            "
-            
+
         >
-            <div className="max auto flex h-16 max-w-7xl items-center justify-between px-5 md:px-8 lg:px-10">
-            <a href='#' className="flex items-center gap-2 text-2xl font-bold text-white">
-                <span>&lt;/&gt;</span>
+            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 md:px-8 lg:px-10 w-full">
+            <a href='/' className="flex items-center gap-2 text-2xl font-bold text-white">
+                <span className="text-blue-400">&lt;/&gt;</span>
                 CODECIRCLE
             </a>
 
-            <div className="hidden items-center gap-10 md:flex ">
+            <div className="hidden items-center gap-10 md:flex">
                <nav className="flex gap-8"> {navItems.map(item =>(
                     <a 
                     key={item.label}

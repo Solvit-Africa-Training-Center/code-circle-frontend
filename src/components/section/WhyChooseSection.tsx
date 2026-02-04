@@ -1,4 +1,4 @@
-import Image from '@/assets/image2.jpg';
+import Image from '../../assets/image2.jpg';
 
 export default function WhyChooseSection() {
   const reasons = [
@@ -8,7 +8,7 @@ export default function WhyChooseSection() {
     },
     {
       number: '02',
-      description: 'If you\'re not ready yet, CodeCircle doesn\'t block you—it guides you. Personalized learning recommendations and relate opportunities ensure continuous improvement and fair access to growth.'
+      description: 'If you\'re not ready yet, CodeCircle doesn\'t block you—it guides you. Personalized learning recommendations and retake opportunities ensure continuous improvement and fair access to growth.'
     },
     {
       number: '03',
@@ -18,7 +18,7 @@ export default function WhyChooseSection() {
 
   return (
     <section className="relative w-full py-20 md:py-28 overflow-hidden bg-white">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 min-h-[500px] md:min-h-[600px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 min-h-[500px] md:min-h-[600px] px-8 md:px-16">
         {/* Left - Image */}
         <div className="flex justify-start items-stretch overflow-hidden">
           <img
@@ -29,17 +29,17 @@ export default function WhyChooseSection() {
         </div>
 
         {/* Right - Content */}
-        <div className="flex flex-col justify-center px-6 md:px-12 py-12 md:py-0">
+        <div className="flex flex-col justify-center py-12 md:py-0 pl-0 md:pl-12">
           <div className="max-w-lg">
-            <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
+            <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-blue-900">
               Why Choose CodeCircle
             </h2>
 
-            <div className="mt-12 space-y-8">
+            <div className="mt-12 space-y-8 text-left">
               {reasons.map((reason) => (
                 <div key={reason.number} className="flex gap-6">
                   <div className="flex-shrink-0">
-                    <span className="text-4xl md:text-5xl font-bold text-sky-600">
+                    <span className="text-4xl md:text-5xl font-bold text-blue-900">
                       {reason.number}
                     </span>
                   </div>

@@ -40,7 +40,7 @@ export default function ServicesSection() {
       features: ['Analytics & insights', 'Real-time monitoring', 'Custom reports'],
       icon: (
         <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M3 13h2v8H3zm4-8h2v16H7zm4-2h2v18h-2zm4-2h2v20h-2zm4 4h2v16h-2z" />
+          <path d="M3 13h8v8H3zm10-8h8v16h-8zm-10-2h8v6H3z" />
         </svg>
       )
     },
@@ -58,69 +58,75 @@ export default function ServicesSection() {
   ];
 
   return (
-    <section className="relative py-20 md:py-28 overflow-hidden bg-gradient-to-b from-white to-slate-50">
-      <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+    <section className="relative py-20 md:py-28 overflow-hidden bg-white">
+      <div className="relative w-full px-8 md:px-16">
         {/* Header */}
         <div className="text-center mb-16">
-          <p className="text-sm font-semibold text-sky-600 uppercase tracking-wide">Our Services</p>
-          <h2 className="mt-2 text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
+          <p className="text-sm font-semibold text-blue-900 uppercase tracking-wide">Our Services</p>
+          <h2 className="mt-2 text-4xl md:text-5xl font-bold tracking-tight text-blue-900">
             Wide Range of Services
           </h2>
         </div>
 
-        {/* Sliding Cards Container */}
+        {/* Sliding Cards Container - Shows exactly 2 cards at a time */}
         <div className="relative overflow-hidden">
-          <div className="flex gap-6 animate-slide">
+          <div className="flex gap-6 animate-services-slide w-fit">
+            {/* Original services */}
             {services.map((service) => (
               <div
                 key={service.id}
-                className="flex-shrink-0 w-full sm:w-96 rounded-2xl border border-slate-800 bg-slate-900 p-8 transition-all hover:shadow-lg hover:border-blue-500/50"
+                className="flex-shrink-0 w-96 rounded-2xl bg-slate-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
               >
                 {/* Icon */}
                 <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
                   {service.icon}
                 </div>
 
-                {/* Title */}
-                <h3 className="text-xl font-semibold text-white">{service.title}</h3>
+                {/* Content */}
+                <div className="flex-grow">
+                  {/* Title */}
+                  <h3 className="text-xl font-semibold text-white">{service.title}</h3>
 
-                {/* Description */}
-                <p className="mt-3 text-sm text-slate-300">{service.description}</p>
+                  {/* Description */}
+                  <p className="mt-4 text-sm text-slate-300">{service.description}</p>
+                </div>
 
-                {/* Features */}
-                <ul className="mt-6 space-y-2">
+                {/* Features list at bottom */}
+                <ul className="mt-6 pt-4 border-t border-slate-700 space-y-1">
                   {service.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-400">
-                      <span className="text-blue-400 font-bold mt-0.5">*</span>
-                      <span>{feature}</span>
+                    <li key={idx} className="text-sm text-slate-300">
+                      <span className="text-slate-400">*</span>{feature}
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
-            {/* Duplicate for infinite loop */}
+
+            {/* Duplicate for seamless loop */}
             {services.map((service) => (
               <div
-                key={`duplicate-${service.id}`}
-                className="flex-shrink-0 w-full sm:w-96 rounded-2xl border border-slate-800 bg-slate-900 p-8 transition-all hover:shadow-lg hover:border-blue-500/50"
+                key={`dup-${service.id}`}
+                className="flex-shrink-0 w-96 rounded-2xl bg-slate-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
               >
                 {/* Icon */}
                 <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
                   {service.icon}
                 </div>
 
-                {/* Title */}
-                <h3 className="text-xl font-semibold text-white">{service.title}</h3>
+                {/* Content */}
+                <div className="flex-grow">
+                  {/* Title */}
+                  <h3 className="text-xl font-semibold text-white">{service.title}</h3>
 
-                {/* Description */}
-                <p className="mt-3 text-sm text-slate-300">{service.description}</p>
+                  {/* Description */}
+                  <p className="mt-4 text-sm text-slate-300">{service.description}</p>
+                </div>
 
-                {/* Features */}
-                <ul className="mt-6 space-y-2">
+                {/* Features list at bottom */}
+                <ul className="mt-6 pt-4 border-t border-slate-700 space-y-1">
                   {service.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-400">
-                      <span className="text-blue-400 font-bold mt-0.5">*</span>
-                      <span>{feature}</span>
+                    <li key={idx} className="text-sm text-slate-300">
+                      <span className="text-slate-400">*</span>{feature}
                     </li>
                   ))}
                 </ul>
@@ -131,20 +137,26 @@ export default function ServicesSection() {
       </div>
 
       <style>{`
-        @keyframes slide {
-          0% {
+        @keyframes services-slide {
+          0%, 22% {
             transform: translateX(0);
           }
-          100% {
-            transform: translateX(-50%);
+          23%, 44% {
+            transform: translateX(-816px);
+          }
+          45%, 66% {
+            transform: translateX(-1632px);
+          }
+          67%, 100% {
+            transform: translateX(0);
           }
         }
 
-        .animate-slide {
-          animation: slide 30s linear infinite;
+        .animate-services-slide {
+          animation: services-slide 48s linear infinite;
         }
 
-        .animate-slide:hover {
+        .animate-services-slide:hover {
           animation-play-state: paused;
         }
       `}</style>
