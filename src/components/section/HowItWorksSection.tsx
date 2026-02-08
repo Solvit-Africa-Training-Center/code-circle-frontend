@@ -50,6 +50,7 @@ export default function HowItWorksSection() {
   };
 
   const currentSteps = steps[activeTab as keyof typeof steps];
+  const slidingSteps = [...currentSteps, ...currentSteps];
 
   return (
     <section className="relative py-20 md:py-28 overflow-hidden bg-white">
@@ -86,33 +87,34 @@ export default function HowItWorksSection() {
         </div>
 
         {/* Steps */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          {currentSteps.map((step) => (
-            <div key={step.number} className="relative">
-              {/* Card */}
-              <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-blue-900 to-blue-800 p-8 min-h-[320px] flex flex-col relative">
-                {/* Step Number Badge */}
-                <div className="absolute top-6 left-6 w-12 h-12 rounded-full bg-blue-400 flex items-center justify-center">
-                  <span className="text-xl font-bold text-white">{step.number}</span>
-                </div>
+        <div className="mb-12 overflow-hidden">
+          <div className="flex gap-6 w-max how-it-works-track">
+            {slidingSteps.map((step, index) => (
+              <div
+                key={`${step.number}-${index}`}
+                className="relative min-w-[260px] md:min-w-[300px] lg:min-w-[320px]"
+              >
+                <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-blue-900 to-blue-800 p-8 min-h-[320px] flex flex-col relative">
+                  <div className="absolute top-6 left-6 w-12 h-12 rounded-full bg-blue-400 flex items-center justify-center">
+                    <span className="text-xl font-bold text-white">{step.number}</span>
+                  </div>
 
-                {/* Image Container */}
-                <div className="flex-1 flex items-center justify-center mb-6 mt-8">
-                  <img
-                    src={step.image}
-                    alt={step.title}
-                    className="w-full h-40 object-cover rounded-lg"
-                  />
-                </div>
+                  <div className="flex-1 flex items-center justify-center mb-6 mt-8">
+                    <img
+                      src={step.image}
+                      alt={step.title}
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
+                  </div>
 
-                {/* Content */}
-                <div>
-                  <h3 className="text-lg font-bold text-white mb-2">{step.title}</h3>
-                  <p className="text-sm text-blue-100 leading-relaxed">{step.description}</p>
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-2">{step.title}</h3>
+                    <p className="text-sm text-blue-100 leading-relaxed">{step.description}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* CTA Button */}
@@ -122,6 +124,18 @@ export default function HowItWorksSection() {
           </button>
         </div>
       </div>
+
+      <style>
+        {`
+          @keyframes howItWorksScroll {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+          }
+          .how-it-works-track {
+            animation: howItWorksScroll 20s linear infinite;
+          }
+        `}
+      </style>
     </section>
   );
 }

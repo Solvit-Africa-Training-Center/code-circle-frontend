@@ -75,7 +75,7 @@ export default function ServicesSection() {
             {services.map((service) => (
               <div
                 key={service.id}
-                className="flex-shrink-0 w-96 rounded-2xl bg-slate-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
+                className="flex-shrink-0 w-96 rounded-2xl bg-blue-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
               >
                 {/* Icon */}
                 <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
@@ -92,7 +92,7 @@ export default function ServicesSection() {
                 </div>
 
                 {/* Features list at bottom */}
-                <ul className="mt-6 pt-4 border-t border-slate-700 space-y-1">
+                <ul className="mt-6 pt-4 border-t border-blue-800 space-y-1">
                   {service.features.map((feature, idx) => (
                     <li key={idx} className="text-sm text-slate-300">
                       <span className="text-slate-400">*</span>{feature}
@@ -106,7 +106,7 @@ export default function ServicesSection() {
             {services.map((service) => (
               <div
                 key={`dup-${service.id}`}
-                className="flex-shrink-0 w-96 rounded-2xl bg-slate-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
+                className="flex-shrink-0 w-96 rounded-2xl bg-blue-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
               >
                 {/* Icon */}
                 <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
@@ -123,7 +123,7 @@ export default function ServicesSection() {
                 </div>
 
                 {/* Features list at bottom */}
-                <ul className="mt-6 pt-4 border-t border-slate-700 space-y-1">
+                <ul className="mt-6 pt-4 border-t border-blue-800 space-y-1">
                   {service.features.map((feature, idx) => (
                     <li key={idx} className="text-sm text-slate-300">
                       <span className="text-slate-400">*</span>{feature}

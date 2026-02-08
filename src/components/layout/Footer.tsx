@@ -1,13 +1,13 @@
 export default function Footer(){
   return (
-    <footer className="bg-slate-900 text-slate-200">
+    <footer className="bg-blue-900 text-slate-200">
       <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 items-stretch">
 
           <div>
             <div className="flex items-center gap-3">
-              <span>&lt;/&gt;</span>
-              <span className="text-lg font-semibold text-white">CODECIRCLE</span>
+              <span className="text-lg font-semibold text-white">{'< />'}</span>
+              <span className="text-lg font-semibold text-white tracking-wide">CODECIRCLE</span>
             </div>
             <p className="mt-4 text-sm text-slate-400 max-w-sm text-left">Professional coding club platform where verified admins create learning communities and members grow through structured, skill-verified education.</p>
           </div>
@@ -51,7 +51,7 @@ export default function Footer(){
 
         </div>
 
-        <div className="mt-8 border-t border-slate-800 pt-6 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500">
+        <div className="mt-8 border-t border-blue-800 pt-6 flex flex-col md:flex-row items-center justify-between text-xs text-slate-300">
           <div>© 2026 CodeCircle. All rights reserved</div>
           <div className="mt-4 md:mt-0 flex items-center gap-4">
             <a href="#" className="text-slate-400 hover:text-white">Facebook</a>
