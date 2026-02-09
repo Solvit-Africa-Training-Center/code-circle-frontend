@@ -105,7 +105,7 @@ export default function Header(){
                             >{item.label}</a>
                         ))}
                         <a
-                        href="#"
+                        href="/leader/apply"
                         className="mt-3 rounded-lg border border-blue-300 py-3.5 text-center font-medium text-white"
                         onClick={() => setIsOpen(false)}> 
                         Apply Now</a>

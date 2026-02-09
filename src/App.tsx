@@ -19,6 +19,10 @@ import StudentCollaborationPage from './pages/StudentCollaborationPage'
 import StudentProfilePage from './pages/StudentProfilePage'
 import StudentCoursesPage from './pages/StudentCoursesPage'
 import StudentCourseDetailPage from './pages/StudentCourseDetailPage'
+import LeaderApplyCategoryPage from './pages/LeaderApplyCategoryPage'
+import LeaderApplyFormPage from './pages/LeaderApplyFormPage'
+import LeaderApplyTestPage from './pages/LeaderApplyTestPage'
+import LeaderApplyResultPage from './pages/LeaderApplyResultPage'
 import RequireAuth from './components/auth/RequireAuth'
 import ToastContainer from './components/ui/ToastContainer'
 
@@ -36,6 +40,10 @@ function App() {
         <Route path="/clubs/:id/test/quiz" element={<ClubQuizPage />} />
         <Route path="/clubs/:id/test/results" element={<ClubResultsPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/leader/apply" element={<LeaderApplyCategoryPage />} />
+        <Route path="/leader/apply/form" element={<LeaderApplyFormPage />} />
+        <Route path="/leader/apply/test" element={<LeaderApplyTestPage />} />
+        <Route path="/leader/apply/result" element={<LeaderApplyResultPage />} />
         <Route
           path="/leader/dashboard"
           element={

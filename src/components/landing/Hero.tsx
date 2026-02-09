@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import bg1 from '../../assets/home_11.jpeg'
 import bg2 from '../../assets/home_1111.jpeg'
 import bg3 from '../../assets/home_11111.jpeg'
@@ -26,12 +27,18 @@ export default function Hero() {
 
         {/* Buttons */}
         <div className="flex gap-4 mb-12">
-          <button className="px-6 py-2 border-2 border-blue-400 text-blue-400 rounded-md font-semibold text-sm hover:bg-blue-400 hover:text-white transition-all duration-300">
+          <Link
+            to="/clubs"
+            className="px-6 py-2 border-2 border-blue-400 text-blue-400 rounded-md font-semibold text-sm hover:bg-blue-400 hover:text-white transition-all duration-300"
+          >
             Explore Clubs
-          </button>
-          <button className="px-6 py-2 border-2 border-blue-400 text-blue-400 rounded-md font-semibold text-sm hover:bg-blue-400 hover:text-white transition-all duration-300">
-            Create Club
-          </button>
+          </Link>
+          <Link
+            to="/leader/apply"
+            className="px-6 py-2 border-2 border-blue-400 text-blue-400 rounded-md font-semibold text-sm hover:bg-blue-400 hover:text-white transition-all duration-300"
+          >
+            Apply to Lead
+          </Link>
         </div>
 
         {/* Stats */}
