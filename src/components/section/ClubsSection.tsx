@@ -1,71 +1,73 @@
-import img1 from '@/assets/image.jpg';
-import img2 from '@/assets/image1.png';
-import img3 from '@/assets/image2.jpg';
-import img4 from '@/assets/image3.png';
-import img5 from '@/assets/image4.jpg';
-import img6 from '@/assets/image5.jpg';
+import img1 from '@/assets/image-7.jpg';
+import img2 from '@/assets/image-6.jpg';
+import img3 from '@/assets/image-8.jpg';
+import img4 from '@/assets/image-9.jpg';
+import img5 from '@/assets/image2.jpg';
+import img6 from '@/assets/image2.jpg';
+import { Package, LayoutGrid } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function ClubsSection() {
   const clubs = [
     {
       id: 1,
-      name: 'CodeCraft Club',
-      category: 'Software Development',
+      name: 'Frontend Flow',
+      category: 'Focus on creating clean, interactive user interfaces using modern frameworks',
       image: img1,
       admins: ['Brian Kim'],
       adminCount: 1,
-      members: 8,
-      weeks: 4
+      projects: 4,
+      modules: 8
     },
     {
       id: 2,
-      name: 'ML Innovators',
-      category: 'Machine Learning',
+      name: 'Web Wizards',
+      category: 'Build modern, responsive websites using cutting-edge web technologies',
       image: img2,
       admins: ['Alex Chen'],
       adminCount: 1,
-      members: 10,
-      weeks: 6
+      projects: 4,
+      modules: 8
     },
     {
       id: 3,
-      name: 'Web Wizards',
-      category: 'Web Development',
+      name: 'FullStack Forge',
+      category: 'Develop complete web applications from end-to-end using modern stacks',
       image: img3,
       admins: ['Clara Singh'],
       adminCount: 1,
-      members: 6,
-      weeks: 5
+      projects: 4,
+      modules: 3
     },
     {
       id: 4,
-      name: 'AI Pioneers',
-      category: 'AI Research',
+      name: 'CodeCraft Club',
+      category: 'Learn how to design, build, and maintain well-structured software systems',
       image: img4,
       admins: ['David Lee'],
       adminCount: 1,
-      members: 7,
-      weeks: 3
+      projects: 4,
+      modules: 7
     },
     {
       id: 5,
-      name: 'Data Explorers',
-      category: 'Data Science',
+      name: 'System Builders',
+      category: 'Learn how to design, build, and maintain well-structured software systems',
       image: img5,
       admins: ['Emily Roberts'],
       adminCount: 1,
-      members: 5,
-      weeks: 4
+      projects: 5,
+      modules: 7
     },
     {
       id: 6,
-      name: 'CyberGuardians',
-      category: 'Cybersecurity',
+      name: 'Clean Code Circle',
+      category: 'Master best practices for writing clean, readable, maintainable, and testable code',
       image: img6,
       admins: ['Frank Merrith'],
       adminCount: 1,
-      members: 9,
-      weeks: 5
+      projects: 4,
+      modules: 4
     }
   ];
 
@@ -74,65 +76,114 @@ export default function ClubsSection() {
       <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16">
-          <p className="text-sm font-semibold text-sky-600 uppercase tracking-wide">Our Clubs</p>
-          <h2 className="mt-2 text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
-            Join a Club Gain Skills
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-blue-900">
+            Our Clubs
           </h2>
+          <p className="mt-2 text-base text-blue-600 font-medium">Join a Club Gain Skills</p>
         </div>
 
         {/* Clubs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {clubs.map((club) => (
-            <div
-              key={club.id}
-              className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-lg transition-shadow"
-            >
-              {/* Image */}
-              <div className="relative h-48 overflow-hidden bg-slate-200">
-                <img
-                  src={club.image}
-                  alt={club.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* Content */}
-              <div className="p-6">
-                {/* Club Name */}
-                <h3 className="text-lg font-semibold text-slate-900">{club.name}</h3>
-                <p className="text-sm text-sky-600 font-medium mt-1">{club.category}</p>
-
-                {/* Divider */}
-                <hr className="my-4 border-slate-200" />
-
-                {/* Admin Info */}
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="h-4 w-4 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4m0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                    </svg>
-                    <span className="text-slate-700">{club.admins[0]}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <svg className="h-4 w-4 text-slate-600" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" />
-                    </svg>
-                    <span className="text-slate-700">{club.members} weeks</span>
-                  </div>
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {clubs.slice(0, 3).map((club) => (
+              <div
+                key={club.id}
+                className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
+              >
+                {/* Image */}
+                <div className="relative h-44 overflow-hidden bg-slate-200">
+                  <img
+                    src={club.image}
+                    alt={club.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
 
-                {/* Stats */}
-                <div className="flex gap-2 mb-4 text-xs text-slate-600">
-                  <span>📌 {club.members} members</span>
+                {/* Content */}
+                <div className="p-5">
+                  {/* Club Name */}
+                  <h3 className="text-base font-semibold text-blue-900">{club.name}</h3>
+                  <p className="text-xs text-blue-900 mt-2 leading-relaxed text-left">{club.category}</p>
+
+                  {/* Divider */}
+                  <hr className="my-3 border-slate-200" />
+
+                  {/* Stats */}
+                  <div className="flex justify-between items-center mb-5">
+                    <div className="flex items-center gap-1.5">
+                      <Package className="h-4 w-4 text-blue-900" />
+                      <span className="text-xs font-semibold text-blue-900">{club.projects} Projects</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <LayoutGrid className="h-4 w-4 text-blue-900" />
+                      <span className="text-xs font-semibold text-blue-900">{club.modules} Modules</span>
+                    </div>
+                  </div>
+
+                  {/* View Details Button */}
+                  <button className="w-full rounded-full bg-blue-900 text-white py-2 font-semibold hover:bg-blue-700 transition-colors text-xs">
+                    View Details
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-300"></div>
+
+          {/* Second Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {clubs.slice(3, 6).map((club) => (
+              <div
+                key={club.id}
+                className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
+              >
+                {/* Image */}
+                <div className="relative h-44 overflow-hidden bg-slate-200">
+                  <img
+                    src={club.image}
+                    alt={club.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
 
-                {/* Join Button */}
-                <button className="w-full rounded-lg bg-blue-600 text-white py-2.5 font-semibold hover:bg-blue-700 transition-colors">
-                  Join
-                </button>
+                {/* Content */}
+                <div className="p-5">
+                  {/* Club Name */}
+                  <h3 className="text-base font-semibold text-blue-900">{club.name}</h3>
+                  <p className="text-xs text-blue-900 mt-2 leading-relaxed text-left">{club.category}</p>
+
+                  {/* Divider */}
+                  <hr className="my-3 border-slate-200" />
+
+                  {/* Stats */}
+                  <div className="flex justify-between items-center mb-5">
+                    <div className="flex items-center gap-1.5">
+                      <Package className="h-4 w-4 text-blue-900" />
+                      <span className="text-xs font-semibold text-blue-900">{club.projects} Projects</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <LayoutGrid className="h-4 w-4 text-blue-900" />
+                      <span className="text-xs font-semibold text-blue-900">{club.modules} Modules</span>
+                    </div>
+                  </div>
+
+                  {/* View Details Button */}
+                  <button className="w-full rounded-full bg-blue-900 text-white py-2 font-semibold hover:bg-blue-700 transition-colors text-xs">
+                    View Details
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {/* Explore More Link */}
+          <div className="flex justify-center mt-12">
+            <Link to="/clubs" className="text-blue-600 font-semibold hover:text-blue-700 transition-colors text-base">
+              Explore More →
+            </Link>
+          </div>
         </div>
       </div>
     </section>
