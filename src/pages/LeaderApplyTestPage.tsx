@@ -5,6 +5,7 @@ import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
+import { getCameraStream, getScreenStream } from '@/utils/testProctoring';
 
 type LeaderAnswers = {
   q1: string;
@@ -30,6 +31,9 @@ export default function LeaderApplyTestPage() {
   const [timeLeft, setTimeLeft] = useState(totalTimeSeconds);
   const [submitted, setSubmitted] = useState(false);
   const [autoSubmitted, setAutoSubmitted] = useState(false);
+  const hasCamera = Boolean(getCameraStream());
+  const hasScreen = Boolean(getScreenStream());
+  const canTakeTest = hasCamera && hasScreen;
 
   useEffect(() => {
     if (submitted) return;
@@ -159,6 +163,33 @@ export default function LeaderApplyTestPage() {
     };
 
     sessionStorage.setItem('leaderApplyResult', JSON.stringify(resultPayload));
+
+    const formRaw = sessionStorage.getItem('leaderApplyForm');
+    const formPayload = formRaw ? JSON.parse(formRaw) : null;
+    const existingApps = (() => {
+      try {
+        const raw = localStorage.getItem('leaderApplications');
+        return raw ? (JSON.parse(raw) as unknown[]) : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    if (formPayload) {
+      const nextApp = {
+        id: `${Date.now()}`,
+        status: 'pending',
+        submittedAt: new Date().toISOString(),
+        testResult: resultPayload,
+        ...formPayload
+      };
+      const filtered = existingApps.filter((app) => {
+        const typed = app as { email?: string };
+        return typed.email !== formPayload.email;
+      });
+      localStorage.setItem('leaderApplications', JSON.stringify([nextApp, ...filtered]));
+    }
+
     navigate('/leader/apply/result', {
       state: resultPayload
     });
@@ -199,6 +230,15 @@ export default function LeaderApplyTestPage() {
               </div>
             </div>
 
+            {!canTakeTest && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Please complete the test protocol (camera and screen share) before starting.
+                <Link to="/leader/apply/protocol" className="ml-2 font-semibold text-blue-900 underline">
+                  Go to protocol
+                </Link>
+              </div>
+            )}
+
             {autoSubmitted && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 Time is up. Your answers have been submitted automatically.
@@ -236,11 +276,11 @@ export default function LeaderApplyTestPage() {
               <button
                 onClick={() => handleSubmit(false)}
                 className={`px-12 py-3 font-semibold rounded-lg transition-colors ${
-                  submitted
+                  submitted || !canTakeTest
                     ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
                     : 'bg-blue-900 text-white hover:bg-blue-700'
                 }`}
-                disabled={submitted}
+                disabled={submitted || !canTakeTest}
               >
                 {submitted ? 'Submitted' : 'Submit'}
               </button>

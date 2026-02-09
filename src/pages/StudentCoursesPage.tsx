@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
-import { BookOpen, Clock, GraduationCap, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { BookOpen, Clock, GraduationCap, Search, Menu } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as baseClubs } from '@/data/clubs';
 import { studentCourses } from '@/data/studentCourses';
 import { useNavigate } from 'react-router-dom';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 
 export default function StudentCoursesPage() {
   const navigate = useNavigate();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const authUser = useMemo(() => {
     try {
@@ -64,12 +66,23 @@ export default function StudentCoursesPage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-blue-600 font-semibold">My Courses</p>
-              <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Keep learning</h1>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-blue-600 font-semibold">My Courses</p>
+                <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Keep learning</h1>
+              </div>
             </div>
             <div className="flex-1 md:max-w-md">
               <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500">

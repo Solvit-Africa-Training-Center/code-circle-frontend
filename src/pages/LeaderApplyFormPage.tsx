@@ -41,7 +41,15 @@ export default function LeaderApplyFormPage() {
     }));
   };
 
-  const handleNext = () => {
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(new Error('Failed to read file.'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleNext = async () => {
     setError('');
     if (!selectedCategory) {
       setError('Please choose a club category first.');
@@ -49,6 +57,16 @@ export default function LeaderApplyFormPage() {
     }
     if (!form.fullName || !form.email || !form.phone || !form.experience || !form.cvFile || !form.degreeFile) {
       setError('Please complete all required fields and uploads.');
+      return;
+    }
+
+    let cvFileData = '';
+    let degreeFileData = '';
+    try {
+      cvFileData = await readFileAsDataUrl(form.cvFile);
+      degreeFileData = await readFileAsDataUrl(form.degreeFile);
+    } catch {
+      setError('Unable to read uploaded files. Please re-upload and try again.');
       return;
     }
 
@@ -60,10 +78,12 @@ export default function LeaderApplyFormPage() {
       experience: form.experience,
       bio: form.bio,
       cvFileName: form.cvFile?.name ?? '',
-      degreeFileName: form.degreeFile?.name ?? ''
+      cvFileData,
+      degreeFileName: form.degreeFile?.name ?? '',
+      degreeFileData
     };
     sessionStorage.setItem('leaderApplyForm', JSON.stringify(payload));
-    navigate('/leader/apply/test');
+    navigate('/leader/apply/protocol');
   };
 
   return (
@@ -194,7 +214,7 @@ export default function LeaderApplyFormPage() {
                 onClick={handleNext}
                 className="px-8 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Continue to Test
+                Continue to Protocol
               </button>
             </div>
           </div>

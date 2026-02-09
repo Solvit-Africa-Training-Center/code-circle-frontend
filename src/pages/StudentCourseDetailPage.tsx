@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, ChevronLeft, ChevronRight, Layers } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Layers, Menu } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { studentCourses } from '@/data/studentCourses';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 
 type CourseProgress = {
   completedLessons: string[];
@@ -12,6 +13,7 @@ type CourseProgress = {
 export default function StudentCourseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const course = studentCourses.find((item) => item.id === id);
 
   const authUser = useMemo(() => {
@@ -86,7 +88,18 @@ export default function StudentCourseDetailPage() {
       <div className="min-h-screen w-full bg-slate-100">
         <div className="flex min-h-screen">
           <StudentSidebar />
+          <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+            <StudentSidebar variant="mobile" />
+          </MobileSidebarDrawer>
           <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
+            <div className="mb-6 flex items-center">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <h1 className="text-2xl font-semibold text-slate-900">Course not found</h1>
               <p className="text-sm text-slate-600 mt-2">
@@ -109,10 +122,20 @@ export default function StudentCourseDetailPage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div className="flex items-start gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
               <button
                 onClick={() => navigate('/student/courses')}
                 className="inline-flex items-center gap-2 text-xs font-semibold text-blue-600"
@@ -122,6 +145,7 @@ export default function StudentCourseDetailPage() {
               </button>
               <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mt-3">{course.title}</h1>
               <p className="text-sm text-slate-500 mt-1">{course.level}</p>
+              </div>
             </div>
             <div className="rounded-2xl bg-white border border-slate-200 px-4 py-3 text-xs">
               <p className="text-slate-500">Progress</p>

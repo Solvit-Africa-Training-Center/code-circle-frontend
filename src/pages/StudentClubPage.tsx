@@ -7,12 +7,14 @@ import {
   Search,
   Sparkles,
   Users,
+  Menu,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as allClubs } from '@/data/clubs';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import { studentCourses } from '@/data/studentCourses';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 
 const defaultMembers = [
   { name: 'Amina K.', role: 'Club Lead', status: 'online' },
@@ -56,6 +58,7 @@ export default function StudentClubPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [submissionNotes, setSubmissionNotes] = useState('');
   const [submissionCode, setSubmissionCode] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const authUser = useMemo(() => {
     try {
@@ -270,7 +273,18 @@ export default function StudentClubPage() {
       <div className="min-h-screen w-full bg-slate-100">
         <div className="flex min-h-screen">
           <StudentSidebar />
+          <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+            <StudentSidebar variant="mobile" />
+          </MobileSidebarDrawer>
           <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
+            <div className="mb-6 flex items-center">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <h1 className="text-2xl font-semibold text-slate-900">No joined clubs yet</h1>
               <p className="text-sm text-slate-600 mt-2">
@@ -313,10 +327,19 @@ export default function StudentClubPage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="lg:hidden">
+            <div className="lg:hidden flex items-center gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
               <CodeCircleLogo className="text-blue-700" />
             </div>
            

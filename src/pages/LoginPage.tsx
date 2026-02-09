@@ -12,12 +12,74 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const studentDefaultPassword = 'member123';
+  const adminDefault = { email: 'admin@codecircle.com', password: 'admin123' };
 
   const handleSignIn = () => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (normalizedEmail === 'leader@codecircle.com' && password === 'leader123') {
+    if (normalizedEmail === adminDefault.email && password === adminDefault.password) {
       setError('');
-      localStorage.setItem('authUser', JSON.stringify({ email: normalizedEmail, role: 'leader' }));
+      localStorage.setItem('authUser', JSON.stringify({ email: normalizedEmail, role: 'admin' }));
+      const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+      navigate(redirectTo || '/admin/dashboard');
+      return;
+    }
+    const tempLeaders = (() => {
+      try {
+        const raw = localStorage.getItem('leaderTempCredentials');
+        return raw
+          ? (JSON.parse(raw) as { email: string; password: string; expiresAt: string; fullName?: string }[])
+          : [];
+      } catch {
+        return [];
+      }
+    })();
+    const tempMatch = tempLeaders.find(
+      (leader) => leader.email?.toLowerCase() === normalizedEmail && leader.password === password
+    );
+    if (tempMatch) {
+      const isExpired = Date.now() > new Date(tempMatch.expiresAt).getTime();
+      if (isExpired) {
+        const remaining = tempLeaders.filter((leader) => leader.email?.toLowerCase() !== normalizedEmail);
+        localStorage.setItem('leaderTempCredentials', JSON.stringify(remaining));
+        setError('Temporary password expired. Please contact admin for a new one.');
+        return;
+      }
+      setError('');
+      localStorage.setItem(
+        'authUser',
+        JSON.stringify({
+          email: normalizedEmail,
+          role: 'leader',
+          mustChange: true,
+          fullName: tempMatch.fullName
+        })
+      );
+      navigate('/leader/change-password');
+      return;
+    }
+
+    const approvedLeaders = (() => {
+      try {
+        const raw = localStorage.getItem('leaderCredentials');
+        return raw ? (JSON.parse(raw) as { email: string; password: string; fullName?: string }[]) : [];
+      } catch {
+        return [];
+      }
+    })();
+    const matchedLeader = approvedLeaders.find(
+      (leader) => leader.email?.toLowerCase() === normalizedEmail && leader.password === password
+    );
+    if (matchedLeader) {
+      setError('');
+      localStorage.setItem(
+        'authUser',
+        JSON.stringify({
+          email: normalizedEmail,
+          role: 'leader',
+          mustChange: false,
+          fullName: matchedLeader.fullName
+        })
+      );
       const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
       navigate(redirectTo || '/leader/dashboard');
       return;
@@ -39,7 +101,8 @@ export default function LoginPage() {
       return;
     }
     setError(
-      `Invalid credentials. Leaders use leader@codecircle.com / leader123. ` +
+      `Invalid credentials. Admin uses admin@codecircle.com / admin123. ` +
+        `Leaders must use admin-approved credentials. ` +
         `Member must use the email submitted in the club member form with password ${studentDefaultPassword}.`
     );
   };
@@ -100,7 +163,8 @@ export default function LoginPage() {
             <div className="space-y-4">
               <div className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-blue-100/80">
                 Mock login:
-                <div>Leader: leader@codecircle.com / leader123</div>
+                <div>Admin: admin@codecircle.com / admin123</div>
+                <div>Leader: use admin-approved credentials</div>
                 <div>Member: use the email from the member form with password {studentDefaultPassword}</div>
               </div>
               <div>

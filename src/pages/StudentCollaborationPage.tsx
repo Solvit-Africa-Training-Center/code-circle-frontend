@@ -9,11 +9,13 @@ import {
   Search,
   Sparkles,
   Users,
+  Menu,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as allClubs } from '@/data/clubs';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 
 const defaultMembers = [
   { name: 'Amina K.', role: 'Club Lead', status: 'online' },
@@ -59,6 +61,7 @@ export default function StudentCollaborationPage() {
   ]);
   const [activePeopleTab, setActivePeopleTab] = useState<'chat' | 'members'>('chat');
   const [submittedNote, setSubmittedNote] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const clubId = Number(id);
   const mergedClubs = useMemo(() => {
@@ -157,9 +160,20 @@ export default function StudentCollaborationPage() {
   if (!club) {
     return (
       <div className="min-h-screen w-full bg-slate-100">
-        <div className="flex min-h-screen">
-          <StudentSidebar />
+      <div className="flex min-h-screen">
+        <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
           <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
+            <div className="mb-6 flex items-center">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <h1 className="text-2xl font-semibold text-slate-900">Club not found</h1>
               <p className="text-sm text-slate-600 mt-2">
@@ -181,9 +195,20 @@ export default function StudentCollaborationPage() {
   if (!isJoined) {
     return (
       <div className="min-h-screen w-full bg-slate-100">
-        <div className="flex min-h-screen">
-          <StudentSidebar />
+      <div className="flex min-h-screen">
+        <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
           <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
+            <div className="mb-6 flex items-center">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <h1 className="text-2xl font-semibold text-slate-900">Join the club first</h1>
               <p className="text-sm text-slate-600 mt-2">
@@ -214,10 +239,19 @@ export default function StudentCollaborationPage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="lg:hidden">
+            <div className="lg:hidden flex items-center gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
               <CodeCircleLogo className="text-blue-700" />
             </div>
             <div className="flex-1 md:max-w-xl">
