@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LeaderSidebar from '../components/leader/LeaderSidebar';
 import LeaderNotificationsBell from '../components/leader/LeaderNotificationsBell';
 import { addNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import { getLeaderDisplayName } from '@/utils/authUser';
 
 const categories = [
   'Web Development',
@@ -21,6 +23,8 @@ const categories = [
 
 export default function LeaderCreateClubPage() {
   const navigate = useNavigate();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const leaderName = getLeaderDisplayName();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [formState, setFormState] = useState({
     name: '',
@@ -72,12 +76,21 @@ export default function LeaderCreateClubPage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <LeaderSidebar active="create" />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Leader Menu">
+          <LeaderSidebar active="create" variant="mobile" />
+        </MobileSidebarDrawer>
 
         {/* Main */}
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           {/* Top bar */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="lg:hidden">
+            <div className="lg:hidden flex items-center gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
               <CodeCircleLogo className="text-blue-700" />
             </div>
             <div className="flex-1 md:max-w-xl">
@@ -91,7 +104,7 @@ export default function LeaderCreateClubPage() {
               <div className="flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-2">
                 <div className="h-7 w-7 rounded-full bg-slate-200"></div>
                 <div className="text-xs">
-                  <p className="text-slate-700 font-medium">Alex Rivera</p>
+                  <p className="text-slate-700 font-medium">{leaderName}</p>
                   <p className="text-slate-400">Leader</p>
                 </div>
               </div>

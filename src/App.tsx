@@ -21,8 +21,15 @@ import StudentCoursesPage from './pages/StudentCoursesPage'
 import StudentCourseDetailPage from './pages/StudentCourseDetailPage'
 import LeaderApplyCategoryPage from './pages/LeaderApplyCategoryPage'
 import LeaderApplyFormPage from './pages/LeaderApplyFormPage'
+import LeaderApplyProtocolPage from './pages/LeaderApplyProtocolPage'
 import LeaderApplyTestPage from './pages/LeaderApplyTestPage'
 import LeaderApplyResultPage from './pages/LeaderApplyResultPage'
+import LeaderChangePasswordPage from './pages/LeaderChangePasswordPage'
+import AdminDashboardPage from './pages/AdminDashboardPage'
+import AdminReportsPage from './pages/AdminReportsPage'
+import AdminUsersPage from './pages/AdminUsersPage'
+import AdminClubsPage from './pages/AdminClubsPage'
+import AdminApplicationsPage from './pages/AdminApplicationsPage'
 import RequireAuth from './components/auth/RequireAuth'
 import ToastContainer from './components/ui/ToastContainer'
 
@@ -42,8 +49,57 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/leader/apply" element={<LeaderApplyCategoryPage />} />
         <Route path="/leader/apply/form" element={<LeaderApplyFormPage />} />
+        <Route path="/leader/apply/protocol" element={<LeaderApplyProtocolPage />} />
         <Route path="/leader/apply/test" element={<LeaderApplyTestPage />} />
         <Route path="/leader/apply/result" element={<LeaderApplyResultPage />} />
+        <Route
+          path="/leader/change-password"
+          element={
+            <RequireAuth allowRoles={['leader']}>
+              <LeaderChangePasswordPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <RequireAuth allowRoles={['admin']}>
+              <AdminDashboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/reports"
+          element={
+            <RequireAuth allowRoles={['admin']}>
+              <AdminReportsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <RequireAuth allowRoles={['admin']}>
+              <AdminUsersPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/clubs"
+          element={
+            <RequireAuth allowRoles={['admin']}>
+              <AdminClubsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/applications"
+          element={
+            <RequireAuth allowRoles={['admin']}>
+              <AdminApplicationsPage />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/leader/dashboard"
           element={

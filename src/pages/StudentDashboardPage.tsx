@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
-import { BookOpen, Calendar, Flame, Target, Users, CheckCircle2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { BookOpen, Calendar, Flame, Target, Users, CheckCircle2, Menu } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as baseClubs } from '@/data/clubs';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 
 const upcomingSessions = [
   { title: 'Frontend Sync', time: 'Today · 4:30 PM', club: 'UI Builders' },
@@ -16,6 +17,7 @@ const tasks = [
 ];
 
 export default function StudentDashboardPage() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const authUser = useMemo(() => {
     try {
       const raw = localStorage.getItem('authUser');
@@ -129,14 +131,25 @@ export default function StudentDashboardPage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
               <p className="text-xs uppercase tracking-[0.3em] text-blue-600 font-semibold">Student Dashboard</p>
               <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
                 Welcome back, {displayName}
               </h1>
+              </div>
             </div>
             <div className="flex items-center gap-3 rounded-2xl bg-white border border-slate-200 px-3 py-2">
               <div className="h-8 w-8 rounded-full bg-blue-100"></div>

@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from 'react';
+
 export default function ServicesSection() {
   const services = [
     {
@@ -54,8 +56,47 @@ export default function ServicesSection() {
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
         </svg>
       )
+    },
+    {
+      id: 6,
+      title: 'Mentorship & Guidance',
+      description: 'Connect with experienced mentors to get personalized guidance, career advice, and code reviews tailored to your goals.',
+      features: ['1:1 mentoring', 'Career guidance', 'Portfolio reviews'],
+      icon: (
+        <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 3a9 9 0 1 0 9 9 9.01 9.01 0 0 0-9-9m-1 5h2v4h-2zm0 6h2v2h-2z" />
+        </svg>
+      )
     }
   ];
+
+  const [pairIndex, setPairIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setIsAnimating(true);
+    }, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const getService = (i: number) => services[((i % services.length) + services.length) % services.length];
+  const currentPair = useMemo(() => {
+    if (pairIndex === services.length - 1) {
+      return [services[pairIndex]];
+    }
+    return [services[pairIndex], services[pairIndex + 1]];
+  }, [pairIndex, services]);
+  const nextPair = useMemo(
+    () => [getService(pairIndex + 2), getService(pairIndex + 3)],
+    [pairIndex]
+  );
+
+  const handleTransitionEnd = () => {
+    if (!isAnimating) return;
+    setIsAnimating(false);
+    setPairIndex((prev) => (prev + 2) % services.length);
+  };
 
   return (
     <section className="relative py-20 md:py-28 overflow-hidden bg-white">
@@ -70,96 +111,64 @@ export default function ServicesSection() {
 
         {/* Sliding Cards Container - Shows exactly 2 cards at a time */}
         <div className="relative overflow-hidden">
-          <div className="flex gap-6 animate-services-slide w-fit">
-            {/* Original services */}
-            {services.map((service) => (
-              <div
-                key={service.id}
-                className="flex-shrink-0 w-96 rounded-2xl bg-blue-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
-              >
-                {/* Icon */}
-                <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
-                  {service.icon}
+          <div
+            className={`flex w-[200%] ${
+              isAnimating
+                ? 'transition-transform duration-700 ease-in-out -translate-x-1/2'
+                : 'transition-none translate-x-0'
+            }`}
+            onTransitionEnd={handleTransitionEnd}
+          >
+            <div className="grid w-1/2 grid-cols-1 gap-6 sm:grid-cols-2">
+              {currentPair.map((service) => (
+                <div
+                  key={service.id}
+                  className="rounded-2xl bg-blue-900 p-8 min-h-96 h-full flex flex-col justify-between transition-all hover:shadow-lg w-full"
+                >
+                  <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
+                    {service.icon}
+                  </div>
+                  <div className="flex-grow">
+                    <h3 className="text-xl font-semibold text-white">{service.title}</h3>
+                    <p className="mt-4 text-sm text-slate-300">{service.description}</p>
+                  </div>
+                  <ul className="mt-6 pt-4 border-t border-blue-800 space-y-1">
+                    {service.features.map((feature, idx) => (
+                      <li key={idx} className="text-sm text-slate-300">
+                        <span className="text-slate-400">*</span>{feature}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              ))}
+            </div>
 
-                {/* Content */}
-                <div className="flex-grow">
-                  {/* Title */}
-                  <h3 className="text-xl font-semibold text-white">{service.title}</h3>
-
-                  {/* Description */}
-                  <p className="mt-4 text-sm text-slate-300">{service.description}</p>
+            <div className="grid w-1/2 grid-cols-1 gap-6 sm:grid-cols-2">
+              {nextPair.map((service) => (
+                <div
+                  key={`next-${service.id}`}
+                  className="rounded-2xl bg-blue-900 p-8 min-h-96 h-full flex flex-col justify-between transition-all hover:shadow-lg w-full"
+                >
+                  <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
+                    {service.icon}
+                  </div>
+                  <div className="flex-grow">
+                    <h3 className="text-xl font-semibold text-white">{service.title}</h3>
+                    <p className="mt-4 text-sm text-slate-300">{service.description}</p>
+                  </div>
+                  <ul className="mt-6 pt-4 border-t border-blue-800 space-y-1">
+                    {service.features.map((feature, idx) => (
+                      <li key={idx} className="text-sm text-slate-300">
+                        <span className="text-slate-400">*</span>{feature}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-
-                {/* Features list at bottom */}
-                <ul className="mt-6 pt-4 border-t border-blue-800 space-y-1">
-                  {service.features.map((feature, idx) => (
-                    <li key={idx} className="text-sm text-slate-300">
-                      <span className="text-slate-400">*</span>{feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-
-            {/* Duplicate for seamless loop */}
-            {services.map((service) => (
-              <div
-                key={`dup-${service.id}`}
-                className="flex-shrink-0 w-96 rounded-2xl bg-blue-900 p-8 min-h-96 flex flex-col justify-between transition-all hover:shadow-lg"
-              >
-                {/* Icon */}
-                <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-blue-600 text-white mb-6">
-                  {service.icon}
-                </div>
-
-                {/* Content */}
-                <div className="flex-grow">
-                  {/* Title */}
-                  <h3 className="text-xl font-semibold text-white">{service.title}</h3>
-
-                  {/* Description */}
-                  <p className="mt-4 text-sm text-slate-300">{service.description}</p>
-                </div>
-
-                {/* Features list at bottom */}
-                <ul className="mt-6 pt-4 border-t border-blue-800 space-y-1">
-                  {service.features.map((feature, idx) => (
-                    <li key={idx} className="text-sm text-slate-300">
-                      <span className="text-slate-400">*</span>{feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes services-slide {
-          0%, 22% {
-            transform: translateX(0);
-          }
-          23%, 44% {
-            transform: translateX(-816px);
-          }
-          45%, 66% {
-            transform: translateX(-1632px);
-          }
-          67%, 100% {
-            transform: translateX(0);
-          }
-        }
-
-        .animate-services-slide {
-          animation: services-slide 48s linear infinite;
-        }
-
-        .animate-services-slide:hover {
-          animation-play-state: paused;
-        }
-      `}</style>
     </section>
   );
 }

@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
-import { Mail, MapPin, ShieldCheck, Trophy, UserCircle2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Mail, MapPin, ShieldCheck, Trophy, UserCircle2, Menu } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as baseClubs } from '@/data/clubs';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 
 export default function StudentProfilePage() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const authUser = useMemo(() => {
     try {
       const raw = localStorage.getItem('authUser');
@@ -51,11 +53,20 @@ export default function StudentProfilePage() {
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <StudentSidebar />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+          <StudentSidebar variant="mobile" />
+        </MobileSidebarDrawer>
 
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           <div className="rounded-3xl bg-white border border-slate-200 p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  className="lg:hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
                 <div className="h-16 w-16 rounded-2xl bg-blue-100 flex items-center justify-center">
                   <UserCircle2 className="h-8 w-8 text-blue-700" />
                 </div>

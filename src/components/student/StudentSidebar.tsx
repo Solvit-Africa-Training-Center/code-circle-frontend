@@ -8,12 +8,21 @@ const navItems = [
   { label: 'Profile', icon: UserCircle2, path: '/student/profile' },
 ];
 
-export default function StudentSidebar() {
+type StudentSidebarProps = {
+  variant?: 'desktop' | 'mobile';
+};
+
+export default function StudentSidebar({ variant = 'desktop' }: StudentSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const containerClass =
+    variant === 'desktop'
+      ? 'hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-blue-900 text-white border-r border-blue-900 px-6 py-6'
+      : 'flex flex-col text-white';
+
   return (
-    <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-blue-900 text-white border-r border-blue-900 px-6 py-6">
+    <aside className={containerClass}>
       <div className="flex items-center gap-2 text-blue-100">
         
         <CodeCircleLogo className="text-blue-100" />

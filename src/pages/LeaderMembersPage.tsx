@@ -4,12 +4,16 @@ import {
   MoreVertical,
   Plus,
   Search,
-  ShieldCheck
+  ShieldCheck,
+  Menu
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import LeaderSidebar from '../components/leader/LeaderSidebar';
 import LeaderNotificationsBell from '../components/leader/LeaderNotificationsBell';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
+import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import { getLeaderDisplayName } from '@/utils/authUser';
 
 const members = [
   {
@@ -56,17 +60,28 @@ const members = [
 
 export default function LeaderMembersPage() {
   const navigate = useNavigate();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const leaderName = getLeaderDisplayName();
 
   return (
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <LeaderSidebar active="members" />
+        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Leader Menu">
+          <LeaderSidebar active="members" variant="mobile" />
+        </MobileSidebarDrawer>
 
         {/* Main */}
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
           {/* Top bar */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="lg:hidden">
+            <div className="lg:hidden flex items-center gap-3">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
               <CodeCircleLogo className="text-blue-700" />
             </div>
             <div className="flex-1 md:max-w-xl">
@@ -92,7 +107,7 @@ export default function LeaderMembersPage() {
               <div className="flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-2">
                 <div className="h-7 w-7 rounded-full bg-slate-200"></div>
                 <div className="text-xs">
-                  <p className="text-slate-700 font-medium">Alex Rivera</p>
+                  <p className="text-slate-700 font-medium">{leaderName}</p>
                   <p className="text-slate-400">Leader</p>
                 </div>
               </div>
@@ -128,17 +143,18 @@ export default function LeaderMembersPage() {
           </div>
 
           {/* Table */}
-          <div className="mt-6 bg-white border border-blue-200 rounded-xl">
-            <div className="grid grid-cols-[2.2fr_2.2fr_1.4fr_2.2fr_0.8fr] gap-4 text-xs text-slate-400 font-semibold px-6 py-3 border-b border-slate-100 text-left">
-              <span>Member Name</span>
-              <span>Verified Skills</span>
-              <span>Club Role</span>
-              <span>Contribution Score</span>
-              <span>Actions</span>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {members.map((member) => (
-                <div key={member.name} className="grid grid-cols-[2.2fr_2.2fr_1.4fr_2.2fr_0.8fr] gap-4 items-center px-6 py-4 text-sm">
+          <div className="mt-6 bg-white border border-blue-200 rounded-xl overflow-x-auto">
+            <div className="min-w-[900px]">
+              <div className="grid grid-cols-[2.2fr_2.2fr_1.4fr_2.2fr_0.8fr] gap-4 text-xs text-slate-400 font-semibold px-6 py-3 border-b border-slate-100 text-left">
+                <span>Member Name</span>
+                <span>Verified Skills</span>
+                <span>Club Role</span>
+                <span>Contribution Score</span>
+                <span>Actions</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {members.map((member) => (
+                  <div key={member.name} className="grid grid-cols-[2.2fr_2.2fr_1.4fr_2.2fr_0.8fr] gap-4 items-center px-6 py-4 text-sm">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-slate-200"></div>
                     <div>
@@ -187,16 +203,17 @@ export default function LeaderMembersPage() {
                       <MoreVertical className="h-4 w-4" />
                     </button>
                   </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 px-6 py-4 border-t border-slate-100">
+                <span>Showing 5 of 154 Members</span>
+                <div className="flex gap-2">
+                  <button className="rounded-md border border-slate-200 px-3 py-1">Previous</button>
+                  <button className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1 text-blue-600">
+                    Next
+                  </button>
                 </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 px-6 py-4 border-t border-slate-100">
-              <span>Showing 5 of 154 Members</span>
-              <div className="flex gap-2">
-                <button className="rounded-md border border-slate-200 px-3 py-1">Previous</button>
-                <button className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1 text-blue-600">
-                  Next
-                </button>
               </div>
             </div>
           </div>

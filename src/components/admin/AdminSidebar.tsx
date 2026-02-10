@@ -1,26 +1,25 @@
 import {
-  ClipboardCheck,
+  BarChart3,
+  Users,
   FolderKanban,
+  ClipboardCheck,
   LayoutDashboard,
-  LogOut,
-  Settings,
-  Users
+  LogOut
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 
-type LeaderSidebarProps = {
-  active: 'dashboard' | 'members' | 'projects' | 'club' | 'create';
+type AdminSidebarProps = {
+  active: 'dashboard' | 'reports' | 'users' | 'clubs' | 'applications';
   variant?: 'desktop' | 'mobile';
 };
 
-export default function LeaderSidebar({ active, variant = 'desktop' }: LeaderSidebarProps) {
+export default function AdminSidebar({ active, variant = 'desktop' }: AdminSidebarProps) {
   const navigate = useNavigate();
 
   const baseItem =
     'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-blue-100 hover:bg-blue-800';
   const activeItem = 'w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-white text-blue-900 font-medium';
-
   const containerClass =
     variant === 'desktop'
       ? 'hidden lg:flex lg:w-64 lg:flex-col lg:justify-between bg-blue-900 text-white border-r border-blue-900 px-6 py-6 fixed left-0 top-0 h-screen'
@@ -33,39 +32,38 @@ export default function LeaderSidebar({ active, variant = 'desktop' }: LeaderSid
         <nav className="mt-10 space-y-2 text-sm">
           <button
             className={active === 'dashboard' ? activeItem : baseItem}
-            onClick={() => navigate('/leader/dashboard')}
+            onClick={() => navigate('/admin/dashboard')}
           >
             <LayoutDashboard className="h-4 w-4" />
             Dashboard
           </button>
           <button
-            className={active === 'members' ? activeItem : baseItem}
-            onClick={() => navigate('/leader/members')}
+            className={active === 'reports' ? activeItem : baseItem}
+            onClick={() => navigate('/admin/reports')}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Reports
+          </button>
+          <button
+            className={active === 'users' ? activeItem : baseItem}
+            onClick={() => navigate('/admin/users')}
           >
             <Users className="h-4 w-4" />
-            Members
+            User Management
           </button>
           <button
-            className={active === 'club' ? activeItem : baseItem}
-            onClick={() => navigate('/leader/club')}
+            className={active === 'clubs' ? activeItem : baseItem}
+            onClick={() => navigate('/admin/clubs')}
           >
             <FolderKanban className="h-4 w-4" />
-            My Club
+            All Clubs
           </button>
           <button
-            className={active === 'projects' ? activeItem : baseItem}
-            onClick={() => navigate('/leader/projects')}
+            className={active === 'applications' ? activeItem : baseItem}
+            onClick={() => navigate('/admin/applications')}
           >
-            <FolderKanban className="h-4 w-4" />
-            Projects
-          </button>
-          <button className={baseItem}>
             <ClipboardCheck className="h-4 w-4" />
-            Assignments
-          </button>
-          <button className={baseItem}>
-            <Settings className="h-4 w-4" />
-            Settings
+            Leader Applications
           </button>
         </nav>
       </div>

@@ -59,7 +59,7 @@ export default function Header(){
             style={{ transform: isHidden ? 'translateY(-100%)' : 'translateY(0)' }}
 
         >
-            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 md:px-8 lg:px-10 w-full">
+            <div className="flex h-16 w-full items-center justify-between px-5 sm:px-8 md:px-16">
             <CodeCircleLogo
                 asLink
                 className="text-white text-2xl"
@@ -105,10 +105,10 @@ export default function Header(){
                             >{item.label}</a>
                         ))}
                         <a
-                        href="/leader/apply"
+                        href="/Login"
                         className="mt-3 rounded-lg border border-blue-300 py-3.5 text-center font-medium text-white"
                         onClick={() => setIsOpen(false)}> 
-                        Apply Now</a>
+                        Login</a>
                     </div>
                 </div>
             )}
