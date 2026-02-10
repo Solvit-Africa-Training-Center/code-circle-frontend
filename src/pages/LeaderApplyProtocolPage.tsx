@@ -197,7 +197,10 @@ export default function LeaderApplyProtocolPage() {
 
             <div className="flex justify-center">
               <button
-                onClick={() => navigate('/leader/apply/test')}
+                onClick={() => {
+                  sessionStorage.setItem('leaderApplyProtocolDone', 'true');
+                  navigate('/leader/apply/test');
+                }}
                 className={`px-12 py-3 font-semibold rounded-lg transition-colors ${
                   canStart ? 'bg-blue-900 text-white hover:bg-blue-700' : 'bg-slate-200 text-slate-500 cursor-not-allowed'
                 }`}
