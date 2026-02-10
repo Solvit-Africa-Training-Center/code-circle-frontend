@@ -69,10 +69,11 @@ export default function AdminApplicationsPage() {
   const handleApprove = async (app: Application) => {
     setNotice('');
     const password = generatePassword();
-    const updated = applications.map((item) =>
-      item.id === app.id
-        ? { ...item, status: 'approved', approvedAt: new Date().toISOString() }
-        : item
+    const updated = applications.map(
+      (item): Application =>
+        item.id === app.id
+          ? { ...item, status: 'approved', approvedAt: new Date().toISOString() }
+          : item
     );
     persistApplications(updated);
 
@@ -141,10 +142,11 @@ export default function AdminApplicationsPage() {
   };
 
   const handleDeny = (app: Application) => {
-    const updated = applications.map((item) =>
-      item.id === app.id
-        ? { ...item, status: 'denied', deniedAt: new Date().toISOString() }
-        : item
+    const updated = applications.map(
+      (item): Application =>
+        item.id === app.id
+          ? { ...item, status: 'denied', deniedAt: new Date().toISOString() }
+          : item
     );
     persistApplications(updated);
   };
