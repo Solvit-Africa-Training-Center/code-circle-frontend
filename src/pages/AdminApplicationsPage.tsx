@@ -40,6 +40,11 @@ export default function AdminApplicationsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [noticeType, setNoticeType] = useState<'success' | 'error'>('success');
+  const [emailConfig, setEmailConfig] = useState<{
+    serviceId: string;
+    templateId: string;
+    publicKey: string;
+  } | null>(null);
   const [applications, setApplications] = useState<Application[]>(() => {
     try {
       const raw = localStorage.getItem('leaderApplications');
@@ -54,12 +59,42 @@ export default function AdminApplicationsPage() {
     [applications]
   );
 
+  const envServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+  const envTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+  const envPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+
   useEffect(() => {
-    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+    const publicKey = envPublicKey ?? emailConfig?.publicKey;
     if (publicKey) {
       emailjs.init(publicKey);
     }
-  }, []);
+  }, [envPublicKey, emailConfig]);
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const res = await fetch('/emailjs.json', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          serviceId?: string;
+          templateId?: string;
+          publicKey?: string;
+        };
+        if (data.serviceId && data.templateId && data.publicKey) {
+          setEmailConfig({
+            serviceId: data.serviceId,
+            templateId: data.templateId,
+            publicKey: data.publicKey
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    if (!envServiceId || !envTemplateId || !envPublicKey) {
+      loadConfig();
+    }
+  }, [envServiceId, envTemplateId, envPublicKey]);
 
   const persistApplications = (next: Application[]) => {
     setApplications(next);
@@ -108,12 +143,14 @@ export default function AdminApplicationsPage() {
     ];
     localStorage.setItem('leaderTempCredentials', JSON.stringify(tempCreds));
 
-    const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-    const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+    const serviceId = envServiceId ?? emailConfig?.serviceId;
+    const templateId = envTemplateId ?? emailConfig?.templateId;
+    const publicKey = envPublicKey ?? emailConfig?.publicKey;
     try {
       if (!serviceId || !templateId || !publicKey) {
-        throw new Error('Missing EmailJS configuration.');
+        setNoticeType('error');
+        setNotice('EmailJS config missing. Provide env vars or /emailjs.json.');
+        return;
       }
       await emailjs.send(
         serviceId,
@@ -133,10 +170,16 @@ export default function AdminApplicationsPage() {
       const message =
         typeof error === 'object' && error && 'text' in error
           ? String((error as { text?: string }).text)
-          : 'Email service error.';
+          : error instanceof Error
+            ? error.message
+            : 'Email service error.';
+      const hint =
+        message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network')
+          ? 'Check EmailJS Allowed Origins for localhost and your Vercel domain.'
+          : '';
       setNoticeType('error');
       setNotice(
-        `Approval saved, but email failed to send. ${message} Please confirm EmailJS settings.`
+        `Approval saved, but email failed to send. ${message} ${hint}`.trim()
       );
     }
   };

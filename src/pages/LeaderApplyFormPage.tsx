@@ -60,6 +60,8 @@ export default function LeaderApplyFormPage() {
       return;
     }
 
+    sessionStorage.removeItem('leaderApplyResult');
+
     let cvFileData = '';
     let degreeFileData = '';
     try {

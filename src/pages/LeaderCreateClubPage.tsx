@@ -8,6 +8,7 @@ import { showToast } from '@/utils/toast';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 import { getLeaderDisplayName } from '@/utils/authUser';
+import { getAuthUser } from '@/utils/authUser';
 
 const categories = [
   'Web Development',
@@ -25,6 +26,7 @@ export default function LeaderCreateClubPage() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const leaderName = getLeaderDisplayName();
+  const authUser = getAuthUser();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [formState, setFormState] = useState({
     name: '',
@@ -64,7 +66,8 @@ export default function LeaderCreateClubPage() {
       image: imagePreview,
       projectsCount: 0,
       modulesCount: 0,
-      stats: { joinedMembers: 0 }
+      stats: { joinedMembers: 0 },
+      leaderEmail: authUser?.email ?? ''
     };
     localStorage.setItem('leaderCreatedClubs', JSON.stringify([createdClub, ...existing]));
     addNotification(`Club created: ${createdClub.name}`);
