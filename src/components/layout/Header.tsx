@@ -21,6 +21,12 @@ export default function Header(){
         const isLeader = location.pathname.startsWith('/leader');
         const isLeaderApply =
             location.pathname === '/leader/apply' || location.pathname.startsWith('/leader/apply/');
+        const isLeaderChangePassword = location.pathname === '/leader/change-password';
+        if (isLeaderChangePassword) {
+            setIsHidden(false);
+            setShowBg(true);
+            return;
+        }
         if (isLeader && !isLeaderApply) {
             setIsHidden(false);
             setShowBg(false);

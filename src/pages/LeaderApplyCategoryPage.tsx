@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -6,6 +6,7 @@ import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
 import { clubs } from '@/data/clubs';
+import { getAuthUser } from '@/utils/authUser';
 
 type CategoryCard = {
   name: string;
@@ -15,6 +16,7 @@ type CategoryCard = {
 
 export default function LeaderApplyCategoryPage() {
   const navigate = useNavigate();
+  const [error, setError] = useState('');
 
   const categories = useMemo<CategoryCard[]>(() => {
     const grouped = new Map<string, { count: number; tags: Set<string> }>();
@@ -33,6 +35,48 @@ export default function LeaderApplyCategoryPage() {
   }, []);
 
   const handleSelect = (category: string) => {
+    setError('');
+    sessionStorage.removeItem('leaderApplyResult');
+    sessionStorage.removeItem('leaderApplyProtocolDone');
+
+    const authUser = getAuthUser();
+    if (authUser?.role === 'leader' && authUser.email) {
+      const existingClubs = (() => {
+        try {
+          const raw = localStorage.getItem('leaderCreatedClubs');
+          return raw ? (JSON.parse(raw) as { category?: string; leaderEmail?: string }[]) : [];
+        } catch {
+          return [];
+        }
+      })();
+      const alreadyLeadsCategory = existingClubs.some(
+        (club) => club.category === category && club.leaderEmail === authUser.email
+      );
+      if (alreadyLeadsCategory) {
+        setError('You already lead a club in this category.');
+        return;
+      }
+
+      const existingApps = (() => {
+        try {
+          const raw = localStorage.getItem('leaderApplications');
+          return raw ? (JSON.parse(raw) as { email?: string; category?: string; status?: string }[]) : [];
+        } catch {
+          return [];
+        }
+      })();
+      const alreadyApplied = existingApps.some(
+        (app) =>
+          app.email?.toLowerCase() === authUser.email?.toLowerCase() &&
+          app.category === category &&
+          app.status !== 'denied'
+      );
+      if (alreadyApplied) {
+        setError('You already applied for this category.');
+        return;
+      }
+    }
+
     sessionStorage.setItem('leaderApplyCategory', category);
     navigate('/leader/apply/form');
   };
@@ -67,6 +111,11 @@ export default function LeaderApplyCategoryPage() {
               Choose the category you want to lead. You will submit your profile and take a leader test.
             </p>
           </div>
+          {error && (
+            <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              {error}
+            </div>
+          )}
 
           <div className="grid gap-6 md:grid-cols-2">
             {categories.map((category) => (

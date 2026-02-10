@@ -5,7 +5,7 @@ import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
-import { getCameraStream, getScreenStream } from '@/utils/testProctoring';
+import { getCameraStream, getScreenStream, stopAllProctoring } from '@/utils/testProctoring';
 
 type LeaderAnswers = {
   q1: string;
@@ -156,6 +156,7 @@ export default function LeaderApplyTestPage() {
     if (fromTimer) {
       setAutoSubmitted(true);
     }
+    stopAllProctoring();
 
     let score = 0;
     Object.entries(answers).forEach(([key, answer]) => {
@@ -242,14 +243,7 @@ export default function LeaderApplyTestPage() {
               </div>
             </div>
 
-            {!canTakeTest && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Please complete the test protocol (camera and screen share) before starting.
-                <Link to="/leader/apply/protocol" className="ml-2 font-semibold text-blue-900 underline">
-                  Go to protocol
-                </Link>
-              </div>
-            )}
+            
 
             {autoSubmitted && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
