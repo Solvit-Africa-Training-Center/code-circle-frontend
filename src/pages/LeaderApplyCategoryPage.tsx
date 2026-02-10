@@ -53,7 +53,7 @@ export default function LeaderApplyCategoryPage() {
         <div className="relative z-10 text-left text-white w-full max-w-7xl px-5 sm:px-6 lg:px-8 pt-20">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-3 tracking-tight">Club Category</h1>
           <Link to="/" className="inline-flex items-center gap-2 text-blue-200 hover:text-white transition-colors">
-            <span>{'<'}</span>
+            <span>«</span>
             <span>Home</span>
           </Link>
         </div>

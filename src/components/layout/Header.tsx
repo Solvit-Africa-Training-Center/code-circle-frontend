@@ -19,7 +19,9 @@ export default function Header(){
 
     useEffect(() => {
         const isLeader = location.pathname.startsWith('/leader');
-        if (isLeader) {
+        const isLeaderApply =
+            location.pathname === '/leader/apply' || location.pathname.startsWith('/leader/apply/');
+        if (isLeader && !isLeaderApply) {
             setIsHidden(false);
             setShowBg(false);
             return;
