@@ -194,6 +194,22 @@ export default function AdminApplicationsPage() {
     persistApplications(updated);
   };
 
+  const openStoredDocument = (dataUrl?: string) => {
+    if (!dataUrl) return;
+    window.open(dataUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const downloadStoredDocument = (dataUrl?: string, fileName?: string) => {
+    if (!dataUrl) return;
+    const anchor = document.createElement('a');
+    anchor.href = dataUrl;
+    anchor.download = fileName || 'document';
+    anchor.rel = 'noreferrer';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  };
+
   return (
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
@@ -271,14 +287,22 @@ export default function AdminApplicationsPage() {
                         <p>
                           <span className="font-semibold text-slate-900">CV:</span>{' '}
                           {app.cvFileData ? (
-                            <a
-                              href={app.cvFileData}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-700 underline"
-                            >
-                              View {app.cvFileName}
-                            </a>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openStoredDocument(app.cvFileData)}
+                                className="text-blue-700 underline"
+                              >
+                                View {app.cvFileName}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadStoredDocument(app.cvFileData, app.cvFileName)}
+                                className="ml-3 text-blue-700 underline"
+                              >
+                                Download
+                              </button>
+                            </>
                           ) : (
                             app.cvFileName
                           )}
@@ -288,14 +312,22 @@ export default function AdminApplicationsPage() {
                         <p>
                           <span className="font-semibold text-slate-900">Degree:</span>{' '}
                           {app.degreeFileData ? (
-                            <a
-                              href={app.degreeFileData}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-700 underline"
-                            >
-                              View {app.degreeFileName}
-                            </a>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openStoredDocument(app.degreeFileData)}
+                                className="text-blue-700 underline"
+                              >
+                                View {app.degreeFileName}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadStoredDocument(app.degreeFileData, app.degreeFileName)}
+                                className="ml-3 text-blue-700 underline"
+                              >
+                                Download
+                              </button>
+                            </>
                           ) : (
                             app.degreeFileName
                           )}

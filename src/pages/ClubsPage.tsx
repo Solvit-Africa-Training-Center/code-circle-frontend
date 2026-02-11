@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Package, LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -10,8 +10,10 @@ import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
 
 export default function ClubsPage() {
+  const INITIAL_VISIBLE_CLUBS = 6;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_CLUBS);
 
   const categories = [
     'All',
@@ -62,6 +64,15 @@ export default function ClubsPage() {
     const matchesCategory = selectedCategory === 'All' || club.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_CLUBS);
+  }, [searchQuery, selectedCategory]);
+
+  const visibleClubs = useMemo(
+    () => filteredClubs.slice(0, visibleCount),
+    [filteredClubs, visibleCount]
+  );
 
   return (
     <div className="w-full overflow-x-hidden bg-white min-h-screen flex flex-col">
@@ -146,7 +157,7 @@ export default function ClubsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredClubs.map((club) => (
+              {visibleClubs.map((club, index) => (
                 <div
                   key={club.id}
                   className="rounded-2xl overflow-hidden bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
@@ -156,6 +167,9 @@ export default function ClubsPage() {
                     <img
                       src={club.image}
                       alt={club.name}
+                      loading={index < 3 ? 'eager' : 'lazy'}
+                      fetchPriority={index < 3 ? 'high' : 'auto'}
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -189,6 +203,18 @@ export default function ClubsPage() {
                 </div>
               ))}
             </div>
+
+            {visibleCount < filteredClubs.length && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((prev) => prev + INITIAL_VISIBLE_CLUBS)}
+                  className="rounded-full bg-blue-900 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                >
+                  Load More Clubs
+                </button>
+              </div>
+            )}
 
             {filteredClubs.length === 0 && (
               <div className="text-center py-16">

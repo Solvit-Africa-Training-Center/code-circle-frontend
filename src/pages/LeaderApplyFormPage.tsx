@@ -16,6 +16,9 @@ type LeaderFormState = {
   degreeFile: File | null;
 };
 
+const MAX_UPLOAD_SIZE_MB = 4;
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+
 export default function LeaderApplyFormPage() {
   const navigate = useNavigate();
   const selectedCategory = useMemo(
@@ -59,6 +62,14 @@ export default function LeaderApplyFormPage() {
       setError('Please complete all required fields and uploads.');
       return;
     }
+    if (form.cvFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      setError(`CV must be ${MAX_UPLOAD_SIZE_MB}MB or smaller.`);
+      return;
+    }
+    if (form.degreeFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      setError(`Degree file must be ${MAX_UPLOAD_SIZE_MB}MB or smaller.`);
+      return;
+    }
 
     sessionStorage.removeItem('leaderApplyResult');
 
@@ -84,7 +95,12 @@ export default function LeaderApplyFormPage() {
       degreeFileName: form.degreeFile?.name ?? '',
       degreeFileData
     };
-    sessionStorage.setItem('leaderApplyForm', JSON.stringify(payload));
+    try {
+      sessionStorage.setItem('leaderApplyForm', JSON.stringify(payload));
+    } catch {
+      setError('Uploaded files are too large for browser storage. Please upload smaller files and try again.');
+      return;
+    }
     navigate('/leader/apply/protocol');
   };
 

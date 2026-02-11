@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Search, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LeaderSidebar from '../components/leader/LeaderSidebar';
@@ -10,7 +10,7 @@ import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 import { getLeaderDisplayName } from '@/utils/authUser';
 import { getAuthUser } from '@/utils/authUser';
 
-const categories = [
+const baseCategories = [
   'Web Development',
   'Software Development',
   'Mobile App Development',
@@ -35,6 +35,20 @@ export default function LeaderCreateClubPage() {
   const [imagePreview, setImagePreview] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const categories = useMemo(() => {
+    const stored = (() => {
+      try {
+        const raw = localStorage.getItem('clubCategories');
+        const parsed = raw ? (JSON.parse(raw) as Array<string | { id: number; name: string }>) : [];
+        return parsed.map((item) => (typeof item === 'string' ? item : item.name));
+      } catch {
+        return [];
+      }
+    })();
+    const merged = [...baseCategories, ...stored].map((item) => item.trim()).filter(Boolean);
+    return Array.from(new Set(merged));
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
