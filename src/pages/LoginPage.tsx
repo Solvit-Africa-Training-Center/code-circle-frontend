@@ -161,12 +161,6 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-blue-100/80">
-                Mock login:
-                <div>Admin: admin@codecircle.com / admin123</div>
-                <div>Leader: use admin-approved credentials</div>
-                <div>Member: use the email from the member form with password {studentDefaultPassword}</div>
-              </div>
               <div>
                 <label className="block text-xs uppercase tracking-[0.2em] text-blue-100/70 mb-2">
                   Email
