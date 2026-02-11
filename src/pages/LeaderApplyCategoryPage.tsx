@@ -12,6 +12,7 @@ type CategoryCard = {
   name: string;
   count: number;
   tags: string[];
+  icon?: string;
 };
 
 export default function LeaderApplyCategoryPage() {
@@ -27,11 +28,35 @@ export default function LeaderApplyCategoryPage() {
       grouped.set(club.category, existing);
     });
 
-    return Array.from(grouped.entries()).map(([name, meta]) => ({
-      name,
-      count: meta.count,
-      tags: Array.from(meta.tags).slice(0, 4)
-    }));
+    const storedCategories = (() => {
+      try {
+        const raw = localStorage.getItem('clubCategories');
+        const parsed = raw ? (JSON.parse(raw) as Array<string | { id: number; name: string; icon: string }>) : [];
+        return parsed.map((item, index) =>
+          typeof item === 'string'
+            ? { id: Date.now() + index, name: item, icon: '🏷️' }
+            : item
+        );
+      } catch {
+        return [];
+      }
+    })();
+
+    const allNames = new Set<string>([
+      ...Array.from(grouped.keys()),
+      ...storedCategories.map((category) => category.name)
+    ]);
+
+    return Array.from(allNames).map((name) => {
+      const meta = grouped.get(name) ?? { count: 0, tags: new Set<string>() };
+      const stored = storedCategories.find((category) => category.name === name);
+      return {
+        name,
+        count: meta.count,
+        tags: Array.from(meta.tags).slice(0, 4),
+        icon: stored?.icon ?? '🏷️'
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
   }, []);
 
   const handleSelect = (category: string) => {
@@ -121,7 +146,14 @@ export default function LeaderApplyCategoryPage() {
             {categories.map((category) => (
               <div key={category.name} className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-900">{category.name}</h3>
+                  <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                    {category.icon?.startsWith('data:') ? (
+                      <img src={category.icon} alt={category.name} className="h-6 w-6 rounded-md object-cover" />
+                    ) : (
+                      <span className="text-base">{category.icon ?? '🏷️'}</span>
+                    )}
+                    {category.name}
+                  </h3>
                   <span className="text-xs text-slate-500">{category.count} clubs</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">

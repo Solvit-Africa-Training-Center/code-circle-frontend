@@ -39,7 +39,6 @@ export default function LandingPage() {
     'how-it-works': false,
     contact: true
   });
-  const [revealEnabled, setRevealEnabled] = useState(false);
 
   const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
     home: null,
@@ -52,23 +51,10 @@ export default function LandingPage() {
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
-      setVisibleSections({
-        home: true,
-        about: true,
-        services: true,
-        'why-choose': true,
-        clubs: true,
-        'how-it-works': true,
-        contact: true
-      });
-      return;
-    }
-
-    setRevealEnabled(true);
     const observer = new IntersectionObserver(
       (entries) => {
         let bestMatch: { id: SectionId; ratio: number } | null = null;
+
         entries.forEach((entry) => {
           const id = entry.target.id as SectionId;
           if (!entry.isIntersecting) return;
@@ -80,7 +66,9 @@ export default function LandingPage() {
           }
         });
 
-        if (bestMatch) setActiveSection(bestMatch.id);
+        if (bestMatch) {
+          setActiveSection(bestMatch.id);
+        }
       },
       {
         threshold: [0.2, 0.4, 0.6],
@@ -93,22 +81,7 @@ export default function LandingPage() {
       if (el) observer.observe(el);
     });
 
-    const fallbackTimer = window.setTimeout(() => {
-      setVisibleSections({
-        home: true,
-        about: true,
-        services: true,
-        'why-choose': true,
-        clubs: true,
-        'how-it-works': true,
-        contact: true
-      });
-    }, 1200);
-
-    return () => {
-      observer.disconnect();
-      window.clearTimeout(fallbackTimer);
-    };
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -137,7 +110,7 @@ export default function LandingPage() {
   );
 
   const sectionClass = (id: SectionId) =>
-    `${revealEnabled ? 'transition-all duration-700 ease-out' : ''} ${
+    `transition-all duration-700 ease-out ${
       visibleSections[id] ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0'
     }`;
 

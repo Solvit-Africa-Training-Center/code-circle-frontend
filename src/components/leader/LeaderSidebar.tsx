@@ -1,5 +1,6 @@
 import {
   ClipboardCheck,
+  BookOpen,
   FolderKanban,
   LayoutDashboard,
   LogOut,
@@ -10,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 
 type LeaderSidebarProps = {
-  active: 'dashboard' | 'members' | 'projects' | 'club' | 'create';
+  active: 'dashboard' | 'members' | 'projects' | 'club' | 'create' | 'courses' | 'assignments';
   variant?: 'desktop' | 'mobile';
 };
 
@@ -59,7 +60,17 @@ export default function LeaderSidebar({ active, variant = 'desktop' }: LeaderSid
             <FolderKanban className="h-4 w-4" />
             Projects
           </button>
-          <button className={baseItem}>
+          <button
+            className={active === 'courses' ? activeItem : baseItem}
+            onClick={() => navigate('/leader/courses')}
+          >
+            <BookOpen className="h-4 w-4" />
+            Courses
+          </button>
+          <button
+            className={active === 'assignments' ? activeItem : baseItem}
+            onClick={() => navigate('/leader/assignments')}
+          >
             <ClipboardCheck className="h-4 w-4" />
             Assignments
           </button>

@@ -14,6 +14,8 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const LeaderDashboardPage = lazy(() => import('./pages/LeaderDashboardPage'))
 const LeaderMembersPage = lazy(() => import('./pages/LeaderMembersPage'))
 const LeaderProjectsPage = lazy(() => import('./pages/LeaderProjectsPage'))
+const LeaderCoursesPage = lazy(() => import('./pages/LeaderCoursesPage'))
+const LeaderAssignmentsPage = lazy(() => import('./pages/LeaderAssignmentsPage'))
 const LeaderClubPage = lazy(() => import('./pages/LeaderClubPage'))
 const LeaderCreateClubPage = lazy(() => import('./pages/LeaderCreateClubPage'))
 const LeaderClubDetailPage = lazy(() => import('./pages/LeaderClubDetailPage'))
@@ -124,6 +126,22 @@ function App() {
             element={
               <RequireAuth allowRoles={['leader']}>
                 <LeaderProjectsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/leader/courses"
+            element={
+              <RequireAuth allowRoles={['leader']}>
+                <LeaderCoursesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/leader/assignments"
+            element={
+              <RequireAuth allowRoles={['leader']}>
+                <LeaderAssignmentsPage />
               </RequireAuth>
             }
           />
