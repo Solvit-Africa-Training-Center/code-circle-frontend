@@ -73,6 +73,83 @@ export default function StudentDashboardPage() {
     [joinedClubIds, normalizedClubs]
   );
 
+  const upcomingSessions = useMemo(() => {
+    const meetings = (() => {
+      try {
+        const raw = localStorage.getItem('leaderMeetings');
+        const stored = raw ? (JSON.parse(raw) as {
+          id: number;
+          title: string;
+          date: string;
+          time: string;
+          clubId: number;
+          clubName: string;
+        }[]) : [];
+        return stored.filter((meeting) => joinedClubIds.includes(meeting.clubId));
+      } catch {
+        return [];
+      }
+    })();
+
+    const sorted = meetings
+      .map((meeting) => ({
+        ...meeting,
+        timestamp: new Date(`${meeting.date}T${meeting.time || '00:00'}`).getTime()
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(0, 3);
+
+    return sorted.map((meeting) => ({
+      title: meeting.title,
+      time: new Date(meeting.timestamp).toLocaleString(),
+      club: meeting.clubName
+    }));
+  }, [joinedClubIds]);
+
+  const tasks = useMemo(() => {
+    const assignments = (() => {
+      try {
+        const raw = localStorage.getItem('leaderAssignments');
+        const stored = raw ? (JSON.parse(raw) as {
+          id: number;
+          title: string;
+          dueDate: string;
+          clubId: number;
+        }[]) : [];
+        return stored.filter((assignment) => joinedClubIds.includes(assignment.clubId));
+      } catch {
+        return [];
+      }
+    })();
+
+    const mapped = assignments
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 3)
+      .map((assignment) => {
+        const daysLeft = Math.ceil(
+          (new Date(assignment.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        );
+        const urgency =
+          daysLeft <= 2
+            ? 'bg-rose-100 text-rose-700'
+            : daysLeft <= 7
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-emerald-100 text-emerald-700';
+        return {
+          label: assignment.title,
+          status: `Due ${new Date(assignment.dueDate).toLocaleDateString()}`,
+          color: urgency
+        };
+      });
+
+    if (mapped.length > 0) return mapped;
+    return [
+      { label: 'Submit sprint demo', status: 'Due today', color: 'bg-rose-100 text-rose-700' },
+      { label: 'Review pull request', status: 'Due tomorrow', color: 'bg-amber-100 text-amber-700' },
+      { label: 'Publish club summary', status: 'Due Fri', color: 'bg-emerald-100 text-emerald-700' },
+    ];
+  }, [joinedClubIds]);
+
   const focusAreas = useMemo(() => {
     const tags = joinedClubs.flatMap((club) => club.tags ?? []);
     const uniqueTags = Array.from(new Set(tags)).slice(0, 4);
@@ -197,6 +274,11 @@ export default function StudentDashboardPage() {
                     <p className="text-xs text-blue-600 mt-2">{session.club}</p>
                   </div>
                 ))}
+                {upcomingSessions.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-3 text-xs text-slate-500">
+                    No meetings scheduled yet.
+                  </div>
+                )}
               </div>
             </div>
           </section>

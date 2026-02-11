@@ -30,6 +30,15 @@ const sectionMeta: Array<{ id: SectionId; label: string }> = [
 export default function LandingPage() {
   const [activeSection, setActiveSection] = useState<SectionId>('home');
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [visibleSections, setVisibleSections] = useState<Record<SectionId, boolean>>({
+    home: true,
+    about: false,
+    services: false,
+    'why-choose': false,
+    clubs: false,
+    'how-it-works': false,
+    contact: true
+  });
 
   const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
     home: null,
@@ -42,13 +51,10 @@ export default function LandingPage() {
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
-      return;
-    }
-
     const observer = new IntersectionObserver(
       (entries) => {
         let bestMatch: { id: SectionId; ratio: number } | null = null;
+
         entries.forEach((entry) => {
           const id = entry.target.id as SectionId;
           if (!entry.isIntersecting) return;
@@ -58,7 +64,9 @@ export default function LandingPage() {
           }
         });
 
-        if (bestMatch) setActiveSection(bestMatch.id);
+        if (bestMatch) {
+          setActiveSection(bestMatch.id);
+        }
       },
       {
         threshold: [0.2, 0.4, 0.6],
@@ -71,9 +79,7 @@ export default function LandingPage() {
       if (el) observer.observe(el);
     });
 
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -100,6 +106,11 @@ export default function LandingPage() {
     () => sectionMeta.find((section) => section.id === activeSection)?.label ?? 'Home',
     [activeSection]
   );
+
+  const sectionClass = (id: SectionId) =>
+    `transition-all duration-700 ease-out ${
+      visibleSections[id] ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0'
+    }`;
 
   return (
     <div className="relative w-full overflow-x-hidden bg-white">

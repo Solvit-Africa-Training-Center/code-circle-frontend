@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 
-const categories = [
+const baseCategories = [
   'Web Development',
   'Software Development',
   'Mobile App Development',
@@ -23,6 +23,20 @@ export default function CreateClubPage() {
     description: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const categories = useMemo(() => {
+    const stored = (() => {
+      try {
+        const raw = localStorage.getItem('clubCategories');
+        const parsed = raw ? (JSON.parse(raw) as Array<string | { id: number; name: string }>) : [];
+        return parsed.map((item) => (typeof item === 'string' ? item : item.name));
+      } catch {
+        return [];
+      }
+    })();
+    const merged = [...baseCategories, ...stored].map((item) => item.trim()).filter(Boolean);
+    return Array.from(new Set(merged));
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

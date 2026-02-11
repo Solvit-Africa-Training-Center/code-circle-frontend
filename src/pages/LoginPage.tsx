@@ -142,7 +142,7 @@ export default function LoginPage() {
             </div>
 
             <button
-              className="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-white/20 bg-white/90 px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-white transition-colors"
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-blue-200/50 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-900 hover:bg-blue-100 transition-colors"
               type="button"
             >
               <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
@@ -170,7 +170,7 @@ export default function LoginPage() {
                   placeholder="Enter email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white-90 placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
                 />
               </div>
 
@@ -187,11 +187,11 @@ export default function LoginPage() {
                   placeholder="Enter a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
                 />
                 <button
                     type="button"
-                    className="text-xs text-blue-200 hover:text-white transition-colors"
+                    className="text-xs text-blue-100 hover:text-white transition-colors"
                   >
                     Forgot password
                   </button>

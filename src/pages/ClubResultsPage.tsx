@@ -31,6 +31,7 @@ export default function ClubResultsPage() {
   const percentage =
     safeAnsweredCount > 0 ? Math.round((score / safeAnsweredCount) * 100) : 0;
   const passed = percentage >= 70;
+  const clubId = Number(id ?? 0);
   const notAnswered = Math.max(0, totalQuestions - safeAnsweredCount);
   const [retryError, setRetryError] = useState('');
 
@@ -53,22 +54,75 @@ export default function ClubResultsPage() {
   };
 
   useEffect(() => {
+    let pending:
+      | {
+          clubId: number;
+          email: string;
+          fullName: string;
+        }
+      | undefined;
+
+    try {
+      const pendingRaw = sessionStorage.getItem('pendingMemberInfo');
+      if (pendingRaw) {
+        const parsed = JSON.parse(pendingRaw) as {
+          clubId: number;
+          email: string;
+          fullName: string;
+        };
+        if (parsed.clubId === clubId) {
+          pending = parsed;
+        }
+      }
+    } catch {
+      pending = undefined;
+    }
+
     if (passed) {
       try {
-        const pendingRaw = sessionStorage.getItem('pendingMemberInfo');
-        if (pendingRaw) {
-          const pending = JSON.parse(pendingRaw) as {
-            clubId: number;
-            email: string;
-            fullName: string;
-          };
+        if (pending) {
           const memberRaw = localStorage.getItem('studentMembers');
-          const existing = memberRaw ? (JSON.parse(memberRaw) as typeof pending[]) : [];
+          const existing = memberRaw
+            ? (JSON.parse(memberRaw) as { clubId?: number; email: string; fullName: string }[])
+            : [];
           const next = [
             ...existing.filter((m) => m.email !== pending.email),
             pending
           ];
           localStorage.setItem('studentMembers', JSON.stringify(next));
+
+          const joinedRaw = localStorage.getItem('studentJoinedClubs');
+          const joined = joinedRaw ? (JSON.parse(joinedRaw) as number[]) : [];
+          localStorage.setItem(
+            'studentJoinedClubs',
+            JSON.stringify(Array.from(new Set([...joined, pending.clubId])))
+          );
+
+          const membersRaw = localStorage.getItem('clubMembers');
+          const membersByClub = membersRaw
+            ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName: string }[]>)
+            : {};
+          const currentMembers = membersByClub[pending.clubId] || [];
+          membersByClub[pending.clubId] = [
+            ...currentMembers.filter((member) => member.email !== pending.email),
+            { email: pending.email, fullName: pending.fullName }
+          ];
+          localStorage.setItem('clubMembers', JSON.stringify(membersByClub));
+
+          const createdRaw = localStorage.getItem('leaderCreatedClubs');
+          if (createdRaw) {
+            const created = JSON.parse(createdRaw) as Array<{ id: number; stats?: { joinedMembers: number } }>;
+            const nextCreated = created.map((clubItem) => {
+              if (clubItem.id !== pending.clubId) return clubItem;
+              return {
+                ...clubItem,
+                stats: { joinedMembers: (membersByClub[pending.clubId] || []).length }
+              };
+            });
+            localStorage.setItem('leaderCreatedClubs', JSON.stringify(nextCreated));
+          }
+
+          localStorage.removeItem(retryKey);
           sessionStorage.removeItem('pendingMemberInfo');
         }
       } catch {
@@ -77,12 +131,40 @@ export default function ClubResultsPage() {
     }
 
     if (!passed) {
+      try {
+        const joinedRaw = localStorage.getItem('studentJoinedClubs');
+        const joined = joinedRaw ? (JSON.parse(joinedRaw) as number[]) : [];
+        const nextJoined = joined.filter((joinedClubId) => joinedClubId !== clubId);
+        localStorage.setItem('studentJoinedClubs', JSON.stringify(nextJoined));
+      } catch {
+        // Ignore cleanup errors for demo flow
+      }
+
+      if (pending) {
+        try {
+          const joinedRaw = localStorage.getItem('studentJoinedClubs');
+          const joined = joinedRaw ? (JSON.parse(joinedRaw) as number[]) : [];
+          const nextJoined = joined.filter((joinedClubId) => joinedClubId !== pending.clubId);
+          localStorage.setItem('studentJoinedClubs', JSON.stringify(nextJoined));
+
+          const membersRaw = localStorage.getItem('clubMembers');
+          const membersByClub = membersRaw
+            ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName?: string }[]>)
+            : {};
+          const currentMembers = membersByClub[pending.clubId] || [];
+          membersByClub[pending.clubId] = currentMembers.filter((member) => member.email !== pending.email);
+          localStorage.setItem('clubMembers', JSON.stringify(membersByClub));
+        } catch {
+          // Ignore cleanup errors for demo flow
+        }
+        sessionStorage.removeItem('pendingMemberInfo');
+      }
       const existing = localStorage.getItem(retryKey);
       if (!existing) {
         localStorage.setItem(retryKey, String(Date.now()));
       }
     }
-  }, [passed, retryKey]);
+  }, [clubId, passed, retryKey]);
 
   const handleRetry = () => {
     const lastFailedAt = localStorage.getItem(retryKey);
@@ -137,7 +219,7 @@ export default function ClubResultsPage() {
             onClick={() => navigate(`/clubs/${id}`)}
             className="inline-flex items-center gap-2 text-blue-200 hover:text-white transition-colors"
           >
-            <span>&lt;</span>
+            <span>«</span>
             <span>Home</span>
           </button>
         </div>
@@ -262,7 +344,10 @@ export default function ClubResultsPage() {
                     </button>
                   ) : (
                     <button
-                     >
+                      onClick={handleRetry}
+                      className="px-8 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Retry Test
                     </button>
                   )}
                   <button

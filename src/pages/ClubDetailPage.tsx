@@ -467,46 +467,6 @@ export default function ClubDetailPage() {
                     fullName: memberForm.fullName.trim()
                   };
                   sessionStorage.setItem('pendingMemberInfo', JSON.stringify(pendingMember));
-                  try {
-                    const raw = localStorage.getItem('studentJoinedClubs');
-                    const existing = raw ? (JSON.parse(raw) as number[]) : [];
-                    const next = Array.from(new Set([...existing, club.id]));
-                    localStorage.setItem('studentJoinedClubs', JSON.stringify(next));
-                  } catch {
-                    localStorage.setItem('studentJoinedClubs', JSON.stringify([club.id]));
-                  }
-                  try {
-                    const membersRaw = localStorage.getItem('clubMembers');
-                    const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName: string }[]>) : {};
-                    const currentMembers = membersByClub[club.id] || [];
-                    const filtered = currentMembers.filter((member) => member.email !== pendingMember.email);
-                    membersByClub[club.id] = [...filtered, { email: pendingMember.email, fullName: pendingMember.fullName }];
-                    localStorage.setItem('clubMembers', JSON.stringify(membersByClub));
-                  } catch {
-                    localStorage.setItem(
-                      'clubMembers',
-                      JSON.stringify({ [club.id]: [{ email: pendingMember.email, fullName: pendingMember.fullName }] })
-                    );
-                  }
-                  try {
-                    const createdRaw = localStorage.getItem('leaderCreatedClubs');
-                    if (createdRaw) {
-                      const created = JSON.parse(createdRaw) as Array<{ id: number; stats?: { joinedMembers: number } }>;
-                      const membersRaw = localStorage.getItem('clubMembers');
-                      const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string }[]>) : {};
-                      const next = created.map((clubItem) => {
-                        if (clubItem.id !== club.id) return clubItem;
-                        const memberCount = (membersByClub[club.id] || []).length;
-                        return {
-                          ...clubItem,
-                          stats: { joinedMembers: memberCount }
-                        };
-                      });
-                      localStorage.setItem('leaderCreatedClubs', JSON.stringify(next));
-                    }
-                  } catch {
-                    // Ignore sync errors for demo flow
-                  }
                   setShowMemberModal(false);
                   navigate(`/clubs/${club.id}/test`);
                 }
