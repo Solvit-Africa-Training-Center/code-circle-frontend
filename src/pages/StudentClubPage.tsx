@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Calendar,
   BookOpen,
+  ClipboardCheck,
   Code2,
   FolderKanban,
   MessagesSquare,
@@ -15,6 +17,7 @@ import { clubs as allClubs } from '@/data/clubs';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import { studentCourses } from '@/data/studentCourses';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import { addNotification } from '@/utils/notifications';
 
 const defaultMembers = [
   { name: 'Amina K.', role: 'Club Lead', status: 'online' },
@@ -48,6 +51,27 @@ const codingCategories = [
   'devops engineering',
 ];
 
+type LeaderAssignment = {
+  id: number;
+  title: string;
+  description: string;
+  dueDate: string;
+  clubId: number;
+  clubName: string;
+  createdAt: string;
+};
+
+type StudentAssignmentSubmission = {
+  assignmentId: number;
+  clubId: number;
+  email: string;
+  fullName: string;
+  submissionText: string;
+  submissionLink: string;
+  submittedAt: string;
+  updatedAt: string;
+};
+
 export default function StudentClubPage() {
   const navigate = useNavigate();
   const [selectedLanguage, setSelectedLanguage] = useState('JavaScript');
@@ -56,8 +80,12 @@ export default function StudentClubPage() {
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState(initialMessages);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
   const [submissionNotes, setSubmissionNotes] = useState('');
   const [submissionCode, setSubmissionCode] = useState('');
+  const [assignmentSubmissionText, setAssignmentSubmissionText] = useState('');
+  const [assignmentSubmissionLink, setAssignmentSubmissionLink] = useState('');
+  const [assignmentError, setAssignmentError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const authUser = useMemo(() => {
@@ -79,14 +107,14 @@ export default function StudentClubPage() {
     }
   }, [authUser.email]);
 
-  const joinedClubIds = useMemo(() => {
+  const [joinedClubIds, setJoinedClubIds] = useState<number[]>(() => {
     try {
       const raw = localStorage.getItem('studentJoinedClubs');
       return raw ? (JSON.parse(raw) as number[]) : [];
     } catch {
       return [];
     }
-  }, []);
+  });
 
   const mergedClubs = useMemo(() => {
     try {
@@ -129,9 +157,36 @@ export default function StudentClubPage() {
     }
   }, []);
 
+  const leaderCourses = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('leaderCourses');
+      const stored = raw ? (JSON.parse(raw) as (typeof studentCourses[number] & { clubId?: number })[]) : [];
+      return stored.filter((course) => !course.clubId || joinedClubIds.includes(course.clubId));
+    } catch {
+      return [];
+    }
+  }, [joinedClubIds]);
+
   const clubProjects = useMemo(
     () => leaderProjects.filter((project) => project.clubId === activeClub?.id),
     [leaderProjects, activeClub]
+  );
+
+  const leaderAssignments = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('leaderAssignments');
+      const stored = raw ? (JSON.parse(raw) as LeaderAssignment[]) : [];
+      return stored;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const clubAssignments = useMemo(
+    () => leaderAssignments
+      .filter((assignment) => assignment.clubId === activeClub?.id)
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
+    [leaderAssignments, activeClub]
   );
 
   const [submissions, setSubmissions] = useState(() => {
@@ -154,12 +209,38 @@ export default function StudentClubPage() {
     }
   });
 
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<StudentAssignmentSubmission[]>(() => {
+    try {
+      const raw = localStorage.getItem('studentAssignmentSubmissions');
+      return raw ? (JSON.parse(raw) as StudentAssignmentSubmission[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const currentSubmission = useMemo(() => {
     if (!selectedProjectId || !authUser.email) return undefined;
     return submissions.find(
       (submission) => submission.projectId === selectedProjectId && submission.email === authUser.email
     );
   }, [selectedProjectId, submissions, authUser.email]);
+
+  const currentAssignmentSubmission = useMemo(() => {
+    if (!selectedAssignmentId || !authUser.email) return undefined;
+    return assignmentSubmissions.find(
+      (submission) =>
+        submission.assignmentId === selectedAssignmentId && submission.email === authUser.email
+    );
+  }, [selectedAssignmentId, assignmentSubmissions, authUser.email]);
+
+  const submittedAssignmentIds = useMemo(() => {
+    if (!authUser.email) return new Set<number>();
+    return new Set(
+      assignmentSubmissions
+        .filter((submission) => submission.email === authUser.email)
+        .map((submission) => submission.assignmentId)
+    );
+  }, [assignmentSubmissions, authUser.email]);
 
   const computeProgress = (codeText: string, noteText: string, previousCount: number) => {
     const codeScore = Math.min(70, Math.round((codeText.trim().length / 400) * 70));
@@ -175,19 +256,20 @@ export default function StudentClubPage() {
   }, [activeClubId, joinedClubs]);
 
   const allCourses = useMemo(() => {
+    const catalog = [...leaderCourses, ...studentCourses];
     const tags = joinedClubs.flatMap((club) => club.tags ?? []);
-    if (tags.length === 0) return studentCourses;
+    if (tags.length === 0) return catalog;
     const lowerTags = tags.map((tag) => tag.toLowerCase());
-    const matched = studentCourses.filter((course) =>
+    const matched = catalog.filter((course) =>
       lowerTags.some((tag) => course.title.toLowerCase().includes(tag))
     );
-    return matched.length > 0 ? matched : studentCourses;
-  }, [joinedClubs]);
+    return matched.length > 0 ? matched : catalog;
+  }, [joinedClubs, leaderCourses]);
 
   const courseList = useMemo(() => {
     if (!activeClub) return [];
     const lowerTags = activeClub.tags.map((tag) => tag.toLowerCase());
-    const matched = studentCourses.filter((course) =>
+    const matched = allCourses.filter((course) =>
       lowerTags.some((tag) => course.title.toLowerCase().includes(tag))
     );
     return matched.length > 0 ? matched : allCourses.slice(0, 3);
@@ -266,6 +348,97 @@ export default function StudentClubPage() {
     ];
     localStorage.setItem('studentProjectSubmissions', JSON.stringify(next));
     setSubmissions(next);
+  };
+
+  const handleOpenAssignment = (assignmentId: number) => {
+    setSelectedAssignmentId(assignmentId);
+    setAssignmentError('');
+    const existing = assignmentSubmissions.find(
+      (submission) => submission.assignmentId === assignmentId && submission.email === authUser.email
+    );
+    setAssignmentSubmissionText(existing?.submissionText ?? '');
+    setAssignmentSubmissionLink(existing?.submissionLink ?? '');
+  };
+
+  const handleSubmitAssignment = () => {
+    if (!selectedAssignmentId || !authUser.email || !activeClub) return;
+    const cleanText = assignmentSubmissionText.trim();
+    const cleanLink = assignmentSubmissionLink.trim();
+    if (!cleanText && !cleanLink) {
+      setAssignmentError('Add submission notes or a link before submitting.');
+      return;
+    }
+    const now = new Date().toISOString();
+    const nextEntry: StudentAssignmentSubmission = {
+      assignmentId: selectedAssignmentId,
+      clubId: activeClub.id,
+      email: authUser.email,
+      fullName: studentProfile?.fullName || authUser.email.split('@')[0] || 'Student',
+      submissionText: cleanText,
+      submissionLink: cleanLink,
+      submittedAt: currentAssignmentSubmission?.submittedAt ?? now,
+      updatedAt: now
+    };
+    const next = [
+      ...assignmentSubmissions.filter(
+        (entry) => !(entry.assignmentId === selectedAssignmentId && entry.email === authUser.email)
+      ),
+      nextEntry
+    ];
+    localStorage.setItem('studentAssignmentSubmissions', JSON.stringify(next));
+    setAssignmentSubmissions(next);
+    setAssignmentError('');
+  };
+
+  const handleLeaveClub = () => {
+    if (!activeClub) return;
+    if (!confirm(`Leave ${activeClub.name}?`)) return;
+
+    const nextJoined = joinedClubIds.filter((clubId) => clubId !== activeClub.id);
+    localStorage.setItem('studentJoinedClubs', JSON.stringify(nextJoined));
+    setJoinedClubIds(nextJoined);
+    setSelectedProjectId(null);
+    setSelectedAssignmentId(null);
+
+    try {
+      const membersRaw = localStorage.getItem('clubMembers');
+      const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName?: string }[]>) : {};
+      const clubMembers = membersByClub[activeClub.id] || [];
+      membersByClub[activeClub.id] = clubMembers.filter((member) => member.email !== authUser.email);
+      localStorage.setItem('clubMembers', JSON.stringify(membersByClub));
+    } catch {
+      // Ignore member storage errors for demo flow
+    }
+
+    try {
+      const createdRaw = localStorage.getItem('leaderCreatedClubs');
+      if (createdRaw) {
+        const created = JSON.parse(createdRaw) as Array<{ id: number; stats?: { joinedMembers: number } }>;
+        const membersRaw = localStorage.getItem('clubMembers');
+        const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string }[]>) : {};
+        const nextClubs = created.map((clubItem) => {
+          if (clubItem.id !== activeClub.id) return clubItem;
+          return {
+            ...clubItem,
+            stats: { joinedMembers: (membersByClub[activeClub.id] || []).length }
+          };
+        });
+        localStorage.setItem('leaderCreatedClubs', JSON.stringify(nextClubs));
+      }
+    } catch {
+      // Ignore sync errors for demo flow
+    }
+
+    const displayName = studentProfile?.fullName || authUser.email?.split('@')[0] || 'A member';
+    addNotification(`${displayName} left the club: ${activeClub.name}`);
+
+    if (nextJoined.length === 0) {
+      setActiveClubId(null);
+      return;
+    }
+    if (activeClubId === activeClub.id) {
+      setActiveClubId(nextJoined[0]);
+    }
   };
 
   if (!activeClub) {
@@ -394,8 +567,12 @@ export default function StudentClubPage() {
                 >
                   Open Collaboration
                 </button>
-                <button className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100">
-                  Invite Member
+                
+                <button
+                  onClick={handleLeaveClub}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                >
+                  Leave Club
                 </button>
               </div>
             </div>
@@ -518,6 +695,103 @@ export default function StudentClubPage() {
                   )}
                 </div>
               </div>
+
+              <div className="rounded-3xl bg-white border border-slate-200 p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-900">Assignments</h2>
+                  <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {clubAssignments.map((assignment) => {
+                    const isSubmitted = submittedAssignmentIds.has(assignment.id);
+                    const dueLabel = new Date(assignment.dueDate).toLocaleDateString();
+                    return (
+                      <button
+                        key={assignment.id}
+                        onClick={() => handleOpenAssignment(assignment.id)}
+                        className="w-full text-left rounded-2xl border border-slate-200 p-4 hover:border-blue-200"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-900">{assignment.title}</p>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                              isSubmitted
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {isSubmitted ? 'Submitted' : 'Pending'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{assignment.description}</p>
+                        <p className="text-xs text-blue-600 mt-2 inline-flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          Due {dueLabel}
+                        </p>
+                      </button>
+                    );
+                  })}
+                  {clubAssignments.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                      No assignments for this club yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selectedAssignmentId && (
+                <div className="rounded-3xl bg-white border border-slate-200 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900">Assignment Submission</h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Submit your work summary or reference link.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedAssignmentId(null)}
+                      className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500">Submission Notes</label>
+                      <textarea
+                        value={assignmentSubmissionText}
+                        onChange={(event) => setAssignmentSubmissionText(event.target.value)}
+                        rows={4}
+                        placeholder="Describe what you completed..."
+                        className="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500">Work Link (Optional)</label>
+                      <input
+                        value={assignmentSubmissionLink}
+                        onChange={(event) => setAssignmentSubmissionLink(event.target.value)}
+                        placeholder="https://github.com/... or drive link"
+                        className="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    {assignmentError && (
+                      <p className="text-xs text-red-600">{assignmentError}</p>
+                    )}
+                    {currentAssignmentSubmission && (
+                      <p className="text-xs text-slate-400">
+                        Last submitted: {new Date(currentAssignmentSubmission.updatedAt).toLocaleString()}
+                      </p>
+                    )}
+                    <button
+                      onClick={handleSubmitAssignment}
+                      className="rounded-lg bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                    >
+                      Submit Assignment
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-3xl bg-white border border-slate-200 p-6">
                 <div className="flex items-center justify-between">

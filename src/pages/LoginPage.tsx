@@ -108,8 +108,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
-      <div className="absolute inset-0">
+    <div className="relative h-screen w-full overflow-hidden bg-slate-950">
+      <div className="fixed inset-0">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-0 animate-fade-in-out"
           style={{ backgroundImage: `url(${bg1})`, animationDelay: '0s' }}
@@ -126,7 +126,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.25),transparent_45%),radial-gradient(circle_at_80%_30%,rgba(14,165,233,0.18),transparent_50%),radial-gradient(circle_at_50%_80%,rgba(147,197,253,0.15),transparent_55%)]"></div>
       </div>
 
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-5 py-12">
+      <div className="relative z-10 flex h-screen items-center justify-center px-5 py-6 sm:py-8">
         <div className="w-full max-w-md">
           <div className="rounded-2xl border border-white/20 bg-white/10 p-8 shadow-[0_30px_80px_rgba(2,6,23,0.55)] backdrop-blur-md">
             <div className="text-center">
@@ -142,7 +142,7 @@ export default function LoginPage() {
             </div>
 
             <button
-              className="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-white/20 bg-white/90 px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-white transition-colors"
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-blue-200/50 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-900 hover:bg-blue-100 transition-colors"
               type="button"
             >
               <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
@@ -176,7 +176,7 @@ export default function LoginPage() {
                   placeholder="Enter email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white-90 placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
                 />
               </div>
 
@@ -193,11 +193,11 @@ export default function LoginPage() {
                   placeholder="Enter a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-blue-100/50 focus:outline-none focus:ring-2 focus:ring-blue-500/60"
                 />
                 <button
                     type="button"
-                    className="text-xs text-blue-200 hover:text-white transition-colors"
+                    className="text-xs text-blue-100 hover:text-white transition-colors"
                   >
                     Forgot password
                   </button>
@@ -213,7 +213,7 @@ export default function LoginPage() {
             )}
 
             <button
-              className="mt-6 w-full rounded-lg bg-white text-slate-900 font-semibold py-2.5 hover:bg-blue-50 transition-colors"
+              className="mt-6 w-full rounded-lg bg-blue-900 text-white font-semibold py-2.5 hover:bg-blue-700 transition-colors"
               type="button"
               onClick={handleSignIn}
             >
