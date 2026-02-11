@@ -30,16 +30,6 @@ const sectionMeta: Array<{ id: SectionId; label: string }> = [
 export default function LandingPage() {
   const [activeSection, setActiveSection] = useState<SectionId>('home');
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [visibleSections, setVisibleSections] = useState<Record<SectionId, boolean>>({
-    home: true,
-    about: false,
-    services: false,
-    'why-choose': false,
-    clubs: false,
-    'how-it-works': false,
-    contact: true
-  });
-  const [revealEnabled, setRevealEnabled] = useState(false);
 
   const sectionRefs = useRef<Record<SectionId, HTMLElement | null>>({
     home: null,
@@ -53,27 +43,15 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
-      setVisibleSections({
-        home: true,
-        about: true,
-        services: true,
-        'why-choose': true,
-        clubs: true,
-        'how-it-works': true,
-        contact: true
-      });
       return;
     }
 
-    setRevealEnabled(true);
     const observer = new IntersectionObserver(
       (entries) => {
         let bestMatch: { id: SectionId; ratio: number } | null = null;
         entries.forEach((entry) => {
           const id = entry.target.id as SectionId;
           if (!entry.isIntersecting) return;
-
-          setVisibleSections((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
 
           if (!bestMatch || entry.intersectionRatio > bestMatch.ratio) {
             bestMatch = { id, ratio: entry.intersectionRatio };
@@ -93,21 +71,8 @@ export default function LandingPage() {
       if (el) observer.observe(el);
     });
 
-    const fallbackTimer = window.setTimeout(() => {
-      setVisibleSections({
-        home: true,
-        about: true,
-        services: true,
-        'why-choose': true,
-        clubs: true,
-        'how-it-works': true,
-        contact: true
-      });
-    }, 1200);
-
     return () => {
       observer.disconnect();
-      window.clearTimeout(fallbackTimer);
     };
   }, []);
 
@@ -136,11 +101,6 @@ export default function LandingPage() {
     [activeSection]
   );
 
-  const sectionClass = (id: SectionId) =>
-    `${revealEnabled ? 'transition-all duration-700 ease-out' : ''} ${
-      visibleSections[id] ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0'
-    }`;
-
   return (
     <div className="relative w-full overflow-x-hidden bg-white">
       <div
@@ -158,7 +118,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current.home = el;
         }}
-        className={sectionClass('home')}
+        className="transition-all duration-700 ease-out"
       >
         <Header />
         <Hero />
@@ -169,7 +129,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current.about = el;
         }}
-        className={sectionClass('about')}
+        className="transition-all duration-700 ease-out"
       >
         <EmpoweringSection />
       </section>
@@ -179,7 +139,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current.services = el;
         }}
-        className={sectionClass('services')}
+        className="transition-all duration-700 ease-out"
       >
         <ServicesSection />
       </section>
@@ -189,7 +149,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current['why-choose'] = el;
         }}
-        className={sectionClass('why-choose')}
+        className="transition-all duration-700 ease-out"
       >
         <WhyChooseSection />
       </section>
@@ -199,7 +159,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current.clubs = el;
         }}
-        className={sectionClass('clubs')}
+        className="transition-all duration-700 ease-out"
       >
         <ClubsSection />
       </section>
@@ -209,7 +169,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current['how-it-works'] = el;
         }}
-        className={sectionClass('how-it-works')}
+        className="transition-all duration-700 ease-out"
       >
         <HowItWorksSection />
       </section>
@@ -219,7 +179,7 @@ export default function LandingPage() {
         ref={(el) => {
           sectionRefs.current.contact = el;
         }}
-        className={sectionClass('contact')}
+        className="transition-all duration-700 ease-out"
       >
         <Footer />
       </section>
