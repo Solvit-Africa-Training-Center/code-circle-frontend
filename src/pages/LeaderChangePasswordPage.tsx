@@ -74,7 +74,7 @@ export default function LeaderChangePasswordPage() {
   return (
     <div className="min-h-screen w-full bg-slate-100 flex flex-col">
       <Header />
-      <div className="flex-1 w-full px-5 py-12">
+      <div className="flex-1 w-full px-5 py-12 pt-24">
         <div className="mx-auto max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-2xl font-semibold text-slate-900">Change Password</h1>
           <p className="mt-2 text-sm text-slate-600">

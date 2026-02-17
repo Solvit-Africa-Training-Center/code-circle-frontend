@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -6,15 +6,18 @@ import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
 import { clubs } from '@/data/clubs';
+import { getAuthUser } from '@/utils/authUser';
 
 type CategoryCard = {
   name: string;
   count: number;
   tags: string[];
+  icon?: string;
 };
 
 export default function LeaderApplyCategoryPage() {
   const navigate = useNavigate();
+  const [error, setError] = useState('');
 
   const categories = useMemo<CategoryCard[]>(() => {
     const grouped = new Map<string, { count: number; tags: Set<string> }>();
@@ -25,14 +28,80 @@ export default function LeaderApplyCategoryPage() {
       grouped.set(club.category, existing);
     });
 
-    return Array.from(grouped.entries()).map(([name, meta]) => ({
-      name,
-      count: meta.count,
-      tags: Array.from(meta.tags).slice(0, 4)
-    }));
+    const storedCategories = (() => {
+      try {
+        const raw = localStorage.getItem('clubCategories');
+        const parsed = raw ? (JSON.parse(raw) as Array<string | { id: number; name: string; icon: string }>) : [];
+        return parsed.map((item, index) =>
+          typeof item === 'string'
+            ? { id: Date.now() + index, name: item, icon: '🏷️' }
+            : item
+        );
+      } catch {
+        return [];
+      }
+    })();
+
+    const allNames = new Set<string>([
+      ...Array.from(grouped.keys()),
+      ...storedCategories.map((category) => category.name)
+    ]);
+
+    return Array.from(allNames).map((name) => {
+      const meta = grouped.get(name) ?? { count: 0, tags: new Set<string>() };
+      const stored = storedCategories.find((category) => category.name === name);
+      return {
+        name,
+        count: meta.count,
+        tags: Array.from(meta.tags).slice(0, 4),
+        icon: stored?.icon ?? '🏷️'
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
   }, []);
 
   const handleSelect = (category: string) => {
+    setError('');
+    sessionStorage.removeItem('leaderApplyResult');
+    sessionStorage.removeItem('leaderApplyProtocolDone');
+
+    const authUser = getAuthUser();
+    if (authUser?.role === 'leader' && authUser.email) {
+      const existingClubs = (() => {
+        try {
+          const raw = localStorage.getItem('leaderCreatedClubs');
+          return raw ? (JSON.parse(raw) as { category?: string; leaderEmail?: string }[]) : [];
+        } catch {
+          return [];
+        }
+      })();
+      const alreadyLeadsCategory = existingClubs.some(
+        (club) => club.category === category && club.leaderEmail === authUser.email
+      );
+      if (alreadyLeadsCategory) {
+        setError('You already lead a club in this category.');
+        return;
+      }
+
+      const existingApps = (() => {
+        try {
+          const raw = localStorage.getItem('leaderApplications');
+          return raw ? (JSON.parse(raw) as { email?: string; category?: string; status?: string }[]) : [];
+        } catch {
+          return [];
+        }
+      })();
+      const alreadyApplied = existingApps.some(
+        (app) =>
+          app.email?.toLowerCase() === authUser.email?.toLowerCase() &&
+          app.category === category &&
+          app.status !== 'denied'
+      );
+      if (alreadyApplied) {
+        setError('You already applied for this category.');
+        return;
+      }
+    }
+
     sessionStorage.setItem('leaderApplyCategory', category);
     navigate('/leader/apply/form');
   };
@@ -53,7 +122,7 @@ export default function LeaderApplyCategoryPage() {
         <div className="relative z-10 text-left text-white w-full max-w-7xl px-5 sm:px-6 lg:px-8 pt-20">
           <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-3 tracking-tight">Club Category</h1>
           <Link to="/" className="inline-flex items-center gap-2 text-blue-200 hover:text-white transition-colors">
-            <span>{'<'}</span>
+            <span>«</span>
             <span>Home</span>
           </Link>
         </div>
@@ -67,12 +136,24 @@ export default function LeaderApplyCategoryPage() {
               Choose the category you want to lead. You will submit your profile and take a leader test.
             </p>
           </div>
+          {error && (
+            <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              {error}
+            </div>
+          )}
 
           <div className="grid gap-6 md:grid-cols-2">
             {categories.map((category) => (
               <div key={category.name} className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-900">{category.name}</h3>
+                  <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                    {category.icon?.startsWith('data:') ? (
+                      <img src={category.icon} alt={category.name} className="h-6 w-6 rounded-md object-cover" />
+                    ) : (
+                      <span className="text-base">{category.icon ?? '🏷️'}</span>
+                    )}
+                    {category.name}
+                  </h3>
                   <span className="text-xs text-slate-500">{category.count} clubs</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">

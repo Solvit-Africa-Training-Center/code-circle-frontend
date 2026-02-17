@@ -5,7 +5,7 @@ import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
-import { getCameraStream, getScreenStream } from '@/utils/testProctoring';
+import { getCameraStream, getScreenStream, stopAllProctoring } from '@/utils/testProctoring';
 
 type LeaderAnswers = {
   q1: string;
@@ -34,6 +34,18 @@ export default function LeaderApplyTestPage() {
   const hasCamera = Boolean(getCameraStream());
   const hasScreen = Boolean(getScreenStream());
   const canTakeTest = hasCamera && hasScreen;
+
+  useEffect(() => {
+    const protocolDone = sessionStorage.getItem('leaderApplyProtocolDone') === 'true';
+    if (!protocolDone) {
+      navigate('/leader/apply/protocol', { replace: true });
+      return;
+    }
+    const existingResult = sessionStorage.getItem('leaderApplyResult');
+    if (existingResult) {
+      navigate('/leader/apply/result', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     if (submitted) return;
@@ -144,6 +156,7 @@ export default function LeaderApplyTestPage() {
     if (fromTimer) {
       setAutoSubmitted(true);
     }
+    stopAllProctoring();
 
     let score = 0;
     Object.entries(answers).forEach(([key, answer]) => {
@@ -230,14 +243,7 @@ export default function LeaderApplyTestPage() {
               </div>
             </div>
 
-            {!canTakeTest && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Please complete the test protocol (camera and screen share) before starting.
-                <Link to="/leader/apply/protocol" className="ml-2 font-semibold text-blue-900 underline">
-                  Go to protocol
-                </Link>
-              </div>
-            )}
+            
 
             {autoSubmitted && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -245,32 +251,38 @@ export default function LeaderApplyTestPage() {
               </div>
             )}
 
-            {questions.map((q) => (
-              <div key={q.id} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-                <h3 className="text-lg font-bold text-blue-900 mb-4">Question {q.number}</h3>
-                <p className="text-slate-900 mb-4 font-medium">{q.question}</p>
+            {!submitted ? (
+              questions.map((q) => (
+                <div key={q.id} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+                  <h3 className="text-lg font-bold text-blue-900 mb-4">Question {q.number}</h3>
+                  <p className="text-slate-900 mb-4 font-medium">{q.question}</p>
 
-                <div className="space-y-3">
-                  {q.options.map((option) => (
-                    <label 
-                      key={option}
-                      className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded transition-colors"
-                    >
-                      <input
-                        type="radio"
-                        name={q.id}
-                        value={option}
-                        checked={answers[q.id as keyof LeaderAnswers] === option}
-                        onChange={(e) => handleAnswerChange(q.id as keyof LeaderAnswers, e.target.value)}
-                        className="w-4 h-4 text-blue-900 focus:ring-blue-900"
-                        disabled={submitted}
-                      />
-                      <span className="text-slate-700">{option}</span>
-                    </label>
-                  ))}
+                  <div className="space-y-3">
+                    {q.options.map((option) => (
+                      <label
+                        key={option}
+                        className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded transition-colors"
+                      >
+                        <input
+                          type="radio"
+                          name={q.id}
+                          value={option}
+                          checked={answers[q.id as keyof LeaderAnswers] === option}
+                          onChange={(e) => handleAnswerChange(q.id as keyof LeaderAnswers, e.target.value)}
+                          className="w-4 h-4 text-blue-900 focus:ring-blue-900"
+                          disabled={submitted}
+                        />
+                        <span className="text-slate-700">{option}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-800">
+                Your test has been submitted. Redirecting to results...
               </div>
-            ))}
+            )}
 
             <div className="flex justify-center pt-6">
               <button

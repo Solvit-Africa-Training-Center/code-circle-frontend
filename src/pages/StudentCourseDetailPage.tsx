@@ -14,7 +14,16 @@ export default function StudentCourseDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const course = studentCourses.find((item) => item.id === id);
+  const leaderCourses = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('leaderCourses');
+      return raw ? (JSON.parse(raw) as typeof studentCourses) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+  const catalog = useMemo(() => [...leaderCourses, ...studentCourses], [leaderCourses]);
+  const course = catalog.find((item) => item.id === id);
 
   const authUser = useMemo(() => {
     try {

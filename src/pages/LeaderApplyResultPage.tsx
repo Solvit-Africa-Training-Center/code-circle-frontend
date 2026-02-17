@@ -98,7 +98,7 @@ export default function LeaderApplyResultPage() {
             onClick={() => navigate('/leader/apply')}
             className="inline-flex items-center gap-2 text-blue-200 hover:text-white transition-colors"
           >
-            <span>{'<'}</span>
+            <span>«</span>
             <span>Home</span>
           </button>
         </div>

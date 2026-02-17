@@ -28,6 +28,7 @@ export default function StudentCoursesPage() {
       return {};
     }
   }, [authUser.email]);
+
   const mergedClubs = useMemo(() => {
     try {
       const stored = localStorage.getItem('leaderCreatedClubs');
@@ -47,20 +48,31 @@ export default function StudentCoursesPage() {
     }
   }, []);
 
+  const leaderCourses = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('leaderCourses');
+      const stored = raw ? (JSON.parse(raw) as (typeof studentCourses[number] & { clubId?: number })[]) : [];
+      return stored.filter((course) => !course.clubId || joinedClubIds.includes(course.clubId));
+    } catch {
+      return [];
+    }
+  }, [joinedClubIds]);
+
   const joinedClubs = useMemo(
     () => mergedClubs.filter((club) => joinedClubIds.includes(club.id)),
     [mergedClubs, joinedClubIds]
   );
 
   const courses = useMemo(() => {
+    const catalog = [...leaderCourses, ...studentCourses];
     const tags = joinedClubs.flatMap((club) => club.tags ?? []);
-    if (tags.length === 0) return studentCourses;
+    if (tags.length === 0) return catalog;
     const lowerTags = tags.map((tag) => tag.toLowerCase());
-    const matched = studentCourses.filter((course) =>
+    const matched = catalog.filter((course) =>
       lowerTags.some((tag) => course.title.toLowerCase().includes(tag))
     );
-    return matched.length > 0 ? matched : studentCourses;
-  }, [joinedClubs]);
+    return matched.length > 0 ? matched : catalog;
+  }, [joinedClubs, leaderCourses]);
 
   return (
     <div className="min-h-screen w-full bg-slate-100">
