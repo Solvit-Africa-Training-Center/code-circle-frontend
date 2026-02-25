@@ -1,43 +1,208 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
-import { getCameraStream, getScreenStream, stopAllProctoring } from '@/utils/testProctoring';
-
-type LeaderAnswers = {
-  q1: string;
-  q2: string;
-  q3: string;
-  q4: string;
-  q5: string;
-  q6: string;
-};
+import {
+  getCameraStream,
+  getScreenStream,
+  setCameraStream as persistCameraStream,
+  setScreenStream as persistScreenStream,
+  stopAllProctoring,
+} from '@/utils/testProctoring';
+import {
+  useGetCreatorTestByCategoryQuery,
+  useSubmitLeaderTestMutation,
+  useUploadLeaderProctoringVideoMutation,
+} from '@/features/LeaderApplicationApi';
+import type { LeaderApplySession } from '@/types/leaderApplication';
 
 export default function LeaderApplyTestPage() {
   const navigate = useNavigate();
-  const [answers, setAnswers] = useState<LeaderAnswers>({
-    q1: '',
-    q2: '',
-    q3: '',
-    q4: '',
-    q5: '',
-    q6: ''
-  });
-
-  const totalTimeSeconds = 12 * 60;
-  const [timeLeft, setTimeLeft] = useState(totalTimeSeconds);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [autoSubmitted, setAutoSubmitted] = useState(false);
-  const hasCamera = Boolean(getCameraStream());
-  const hasScreen = Boolean(getScreenStream());
+  const [submitError, setSubmitError] = useState('');
+  const [recordingError, setRecordingError] = useState('');
+  const [mediaError, setMediaError] = useState('');
+  const [submitLeaderTest, { isLoading: isSubmitting }] = useSubmitLeaderTestMutation();
+  const [uploadLeaderProctoringVideo] = useUploadLeaderProctoringVideoMutation();
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingMimeTypeRef = useRef<string>('video/webm');
+
+  const session = useMemo<LeaderApplySession | null>(() => {
+    const raw = sessionStorage.getItem('leaderApplySession');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as LeaderApplySession;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const {
+    data: test,
+    isLoading: isLoadingTest,
+    isError: isTestError,
+  } = useGetCreatorTestByCategoryQuery(session?.categoryId ?? '', {
+    skip: !session?.categoryId,
+  });
+
+  const questions = useMemo(() => test?.questions ?? [], [test]);
+  const totalTimeSeconds = 12 * 60;
+  const [timeLeft, setTimeLeft] = useState(totalTimeSeconds);
+  const isStreamActive = (stream: MediaStream | null) =>
+    Boolean(
+      stream &&
+        stream.active &&
+        stream.getVideoTracks().some((track) => track.readyState === 'live'),
+    );
+
+  const hasCamera = isStreamActive(getCameraStream());
+  const hasScreen = isStreamActive(getScreenStream());
   const canTakeTest = hasCamera && hasScreen;
+
+  const handleEnableCamera = async () => {
+    setMediaError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMediaError('Camera access is not supported in this browser.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+      persistCameraStream(stream);
+    } catch {
+      setMediaError(
+        'Camera access was blocked. Please allow camera permission and try again.',
+      );
+    }
+  };
+
+  const handleEnableScreen = async () => {
+    setMediaError('');
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setMediaError('Screen sharing is not supported in this browser.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: 15,
+        },
+        audio: false,
+      });
+      persistScreenStream(stream);
+    } catch {
+      setMediaError(
+        'Screen sharing was blocked. Please allow screen permission and try again.',
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!hasScreen || submitted) return;
+    if (recorderRef.current) return;
+
+    const screenStream = getScreenStream();
+    if (!screenStream) return;
+
+    try {
+      const preferredTypes = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+      ];
+      const mimeType =
+        preferredTypes.find((type) => MediaRecorder.isTypeSupported(type)) ??
+        'video/webm';
+
+      recordingMimeTypeRef.current = mimeType;
+      recordingChunksRef.current = [];
+
+      const recorder = new MediaRecorder(screenStream, {
+        mimeType,
+        // Keep file size lower so proctoring uploads reliably complete.
+        videoBitsPerSecond: 600_000,
+      });
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+      recorderRef.current = recorder;
+      recorder.start(1000);
+      setRecordingError('');
+    } catch {
+      setRecordingError('Could not start test recording. You can still submit your answers.');
+    }
+  }, [hasScreen, submitted]);
+
+  useEffect(() => {
+    return () => {
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+      recorderRef.current = null;
+      recordingChunksRef.current = [];
+    };
+  }, []);
+
+  const stopRecordingAndBuildFile = async (): Promise<File | null> => {
+    const recorder = recorderRef.current;
+    if (!recorder) return null;
+
+    if (recorder.state === 'inactive') {
+      const chunks = recordingChunksRef.current;
+      recordingChunksRef.current = [];
+      recorderRef.current = null;
+      if (!chunks.length) return null;
+
+      const mimeType = recordingMimeTypeRef.current || 'video/webm';
+      const blob = new Blob(chunks, { type: mimeType });
+      const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+      return new File([blob], `leader-test-recording.${extension}`, {
+        type: mimeType,
+      });
+    }
+
+    return await new Promise<File | null>((resolve) => {
+      recorder.onstop = () => {
+        const chunks = recordingChunksRef.current;
+        recordingChunksRef.current = [];
+        recorderRef.current = null;
+
+        if (!chunks.length) {
+          resolve(null);
+          return;
+        }
+
+        const mimeType = recordingMimeTypeRef.current || 'video/webm';
+        const blob = new Blob(chunks, { type: mimeType });
+        const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const file = new File([blob], `leader-test-recording.${extension}`, {
+          type: mimeType,
+        });
+        resolve(file);
+      };
+
+      try {
+        recorder.stop();
+      } catch {
+        resolve(null);
+      }
+    });
+  };
 
   useEffect(() => {
     const protocolDone = sessionStorage.getItem('leaderApplyProtocolDone') === 'true';
-    if (!protocolDone) {
+    if (!session || !protocolDone) {
       navigate('/leader/apply/protocol', { replace: true });
       return;
     }
@@ -45,19 +210,19 @@ export default function LeaderApplyTestPage() {
     if (existingResult) {
       navigate('/leader/apply/result', { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, session]);
 
   useEffect(() => {
-    if (submitted) return;
+    if (submitted || !test) return;
     if (timeLeft <= 0) {
-      handleSubmit(true);
+      void handleSubmit(true);
       return;
     }
     const timerId = window.setInterval(() => {
       setTimeLeft((prev) => prev - 1);
     }, 1000);
     return () => window.clearInterval(timerId);
-  }, [submitted, timeLeft]);
+  }, [submitted, timeLeft, test]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -65,147 +230,79 @@ export default function LeaderApplyTestPage() {
     return `${minutes}:${remainder.toString().padStart(2, '0')}`;
   };
 
-  const questions = [
-    {
-      id: 'q1',
-      number: 1,
-      question: 'Which trait is most important for a club leader?',
-      options: [
-        'Strictness',
-        'Clear communication',
-        'Doing all tasks alone',
-        'Avoiding feedback'
-      ]
-    },
-    {
-      id: 'q2',
-      number: 2,
-      question: 'How should a leader handle a struggling member?',
-      options: [
-        'Ignore them',
-        'Offer support and guidance',
-        'Remove them immediately',
-        'Assign harder tasks'
-      ]
-    },
-    {
-      id: 'q3',
-      number: 3,
-      question: 'What is the best way to set expectations for a club project?',
-      options: [
-        'Keep it informal',
-        'Document goals, timeline, and roles',
-        'Only tell senior members',
-        'Decide after the deadline'
-      ]
-    },
-    {
-      id: 'q4',
-      number: 4,
-      question: 'How should conflicts be resolved in a team?',
-      options: [
-        'Let it escalate',
-        'Hold a respectful discussion',
-        'Pick a favorite side',
-        'Avoid addressing it'
-      ]
-    },
-    {
-      id: 'q5',
-      number: 5,
-      question: 'What is a good practice for ensuring quality work?',
-      options: [
-        'Skip reviews',
-        'Use peer reviews and checkpoints',
-        'Wait until the end',
-        'Only review when issues appear'
-      ]
-    },
-    {
-      id: 'q6',
-      number: 6,
-      question: 'How should a leader track progress on weekly goals?',
-      options: [
-        'No tracking',
-        'Weekly check-ins and updates',
-        'Wait until the final week',
-        'Only track attendance'
-      ]
-    }
-  ];
-
-  const correctAnswers = {
-    q1: 'Clear communication',
-    q2: 'Offer support and guidance',
-    q3: 'Document goals, timeline, and roles',
-    q4: 'Hold a respectful discussion',
-    q5: 'Use peer reviews and checkpoints',
-    q6: 'Weekly check-ins and updates'
+  const getErrorMessage = (err: unknown) => {
+    const response = err as { data?: { message?: string | string[] } };
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message[0] ?? 'Unable to submit test.';
+    if (typeof message === 'string' && message.trim()) return message;
+    return 'Unable to submit test. Please try again.';
   };
 
-  const handleAnswerChange = (questionId: keyof LeaderAnswers, answer: string) => {
+  const handleAnswerChange = (questionId: string, answer: string) => {
     setAnswers((prev) => ({
       ...prev,
-      [questionId]: answer
+      [questionId]: answer,
     }));
   };
 
-  const handleSubmit = (fromTimer = false) => {
-    if (submitted) return;
+  const handleSubmit = async (fromTimer = false) => {
+    if (submitted || !session || !test) return;
+    if (!canTakeTest) {
+      setSubmitError(
+        'Camera and screen sharing must remain active until you submit. Please return to protocol and re-enable both.',
+      );
+      return;
+    }
     setSubmitted(true);
+    setSubmitError('');
     if (fromTimer) {
       setAutoSubmitted(true);
     }
-    stopAllProctoring();
 
-    let score = 0;
-    Object.entries(answers).forEach(([key, answer]) => {
-      if (correctAnswers[key as keyof typeof correctAnswers] === answer) {
-        score++;
+    try {
+      const recordedFile = await stopRecordingAndBuildFile();
+      stopAllProctoring();
+
+      const attempt = await submitLeaderTest({
+        userId: session.userId,
+        testId: test.id,
+        answers,
+        purpose: 'CREATE_CLUB',
+        categoryId: session.categoryId,
+      }).unwrap();
+
+      if (recordedFile) {
+        try {
+          const attemptId = attempt.id || attempt.attemptId;
+          if (!attemptId) {
+            throw new Error('Missing attempt ID for proctoring upload');
+          }
+          await uploadLeaderProctoringVideo({
+            attemptId,
+            video: recordedFile,
+          }).unwrap();
+        } catch {
+          setRecordingError('Test submitted, but video upload failed.');
+        }
       }
-    });
 
-    const answeredCount = Object.values(answers).filter(Boolean).length;
-    const attemptedAll = answeredCount === questions.length;
-
-    const resultPayload = {
-      score,
-      totalQuestions: questions.length,
-      attemptedAll,
-      answeredCount
-    };
-
-    sessionStorage.setItem('leaderApplyResult', JSON.stringify(resultPayload));
-
-    const formRaw = sessionStorage.getItem('leaderApplyForm');
-    const formPayload = formRaw ? JSON.parse(formRaw) : null;
-    const existingApps = (() => {
-      try {
-        const raw = localStorage.getItem('leaderApplications');
-        return raw ? (JSON.parse(raw) as unknown[]) : [];
-      } catch {
-        return [];
-      }
-    })();
-
-    if (formPayload) {
-      const nextApp = {
-        id: `${Date.now()}`,
-        status: 'pending',
-        submittedAt: new Date().toISOString(),
-        testResult: resultPayload,
-        ...formPayload
+      const answeredCount = Object.values(answers).filter(Boolean).length;
+      const totalQuestions = questions.length;
+      const resultPayload = {
+        score: attempt.score,
+        passed: attempt.passed,
+        totalQuestions,
+        answeredCount,
+        attemptedAll: answeredCount === totalQuestions,
+        categoryName: session.categoryName || 'Leader',
       };
-      const filtered = existingApps.filter((app) => {
-        const typed = app as { email?: string };
-        return typed.email !== formPayload.email;
-      });
-      localStorage.setItem('leaderApplications', JSON.stringify([nextApp, ...filtered]));
-    }
 
-    navigate('/leader/apply/result', {
-      state: resultPayload
-    });
+      sessionStorage.setItem('leaderApplyResult', JSON.stringify(resultPayload));
+      navigate('/leader/apply/result', { state: resultPayload });
+    } catch (err) {
+      setSubmitted(false);
+      setSubmitError(getErrorMessage(err));
+    }
   };
 
   return (
@@ -238,12 +335,8 @@ export default function LeaderApplyTestPage() {
                   {formatTime(timeLeft)}
                 </p>
               </div>
-              <div className="text-xs text-slate-500">
-                Multiple-choice only
-              </div>
+              <div className="text-xs text-slate-500">Answer all questions</div>
             </div>
-
-            
 
             {autoSubmitted && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -251,14 +344,68 @@ export default function LeaderApplyTestPage() {
               </div>
             )}
 
-            {!submitted ? (
-              questions.map((q) => (
-                <div key={q.id} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-                  <h3 className="text-lg font-bold text-blue-900 mb-4">Question {q.number}</h3>
-                  <p className="text-slate-900 mb-4 font-medium">{q.question}</p>
+            {submitError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {submitError}
+              </div>
+            )}
 
-                  <div className="space-y-3">
-                    {q.options.map((option) => (
+            {recordingError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                {recordingError}
+              </div>
+            )}
+
+            {mediaError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {mediaError}
+              </div>
+            )}
+
+            {!canTakeTest && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-3">
+                <p>
+                  Camera or screen sharing is no longer active. Re-enable both to continue and submit.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleEnableCamera()}
+                    className="rounded-md bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                  >
+                    Re-enable Camera
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleEnableScreen()}
+                    className="rounded-md bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                  >
+                    Re-enable Screen Share
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isLoadingTest && (
+              <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">
+                Loading test...
+              </div>
+            )}
+
+            {isTestError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+                No leader test is available yet. Please contact admin.
+              </div>
+            )}
+
+            {!isLoadingTest && !isTestError && !submitted && questions.map((q, idx) => (
+              <div key={q.id} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+                <h3 className="text-lg font-bold text-blue-900 mb-4">Question {idx + 1}</h3>
+                <p className="text-slate-900 mb-4 font-medium">{q.question}</p>
+
+                <div className="space-y-3">
+                  {Array.isArray(q.options) && q.options.length > 0 ? (
+                    q.options.map((option) => (
                       <label
                         key={option}
                         className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-2 rounded transition-colors"
@@ -267,18 +414,29 @@ export default function LeaderApplyTestPage() {
                           type="radio"
                           name={q.id}
                           value={option}
-                          checked={answers[q.id as keyof LeaderAnswers] === option}
-                          onChange={(e) => handleAnswerChange(q.id as keyof LeaderAnswers, e.target.value)}
+                          checked={answers[q.id] === option}
+                          onChange={(e) => handleAnswerChange(q.id, e.target.value)}
                           className="w-4 h-4 text-blue-900 focus:ring-blue-900"
                           disabled={submitted}
                         />
                         <span className="text-slate-700">{option}</span>
                       </label>
-                    ))}
-                  </div>
+                    ))
+                  ) : (
+                    <textarea
+                      value={answers[q.id] ?? ''}
+                      onChange={(e) => handleAnswerChange(q.id, e.target.value)}
+                      rows={4}
+                      placeholder="Type your answer..."
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-900"
+                      disabled={submitted}
+                    />
+                  )}
                 </div>
-              ))
-            ) : (
+              </div>
+            ))}
+
+            {submitted && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-800">
                 Your test has been submitted. Redirecting to results...
               </div>
@@ -286,15 +444,15 @@ export default function LeaderApplyTestPage() {
 
             <div className="flex justify-center pt-6">
               <button
-                onClick={() => handleSubmit(false)}
+                onClick={() => void handleSubmit(false)}
                 className={`px-12 py-3 font-semibold rounded-lg transition-colors ${
-                  submitted || !canTakeTest
+                  submitted || isLoadingTest || isTestError || isSubmitting || !canTakeTest
                     ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
                     : 'bg-blue-900 text-white hover:bg-blue-700'
                 }`}
-                disabled={submitted || !canTakeTest}
+                disabled={submitted || isLoadingTest || isTestError || isSubmitting || !canTakeTest}
               >
-                {submitted ? 'Submitted' : 'Submit'}
+                {isSubmitting ? 'Submitting...' : submitted ? 'Submitted' : 'Submit'}
               </button>
             </div>
           </div>

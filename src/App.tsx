@@ -19,6 +19,7 @@ const LeaderAssignmentsPage = lazy(() => import('./pages/LeaderAssignmentsPage')
 const LeaderClubPage = lazy(() => import('./pages/LeaderClubPage'))
 const LeaderCreateClubPage = lazy(() => import('./pages/LeaderCreateClubPage'))
 const LeaderClubDetailPage = lazy(() => import('./pages/LeaderClubDetailPage'))
+const LeaderTeamChatPage = lazy(() => import('./pages/LeaderTeamChatPage'))
 const StudentDashboardPage = lazy(() => import('./pages/StudentDashboardPage'))
 const StudentClubPage = lazy(() => import('./pages/StudentClubPage'))
 const StudentCollaborationPage = lazy(() => import('./pages/StudentCollaborationPage'))
@@ -60,7 +61,7 @@ function App() {
           <Route
             path="/leader/change-password"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderChangePasswordPage />
               </RequireAuth>
             }
@@ -68,7 +69,7 @@ function App() {
           <Route
             path="/admin/dashboard"
             element={
-              <RequireAuth allowRoles={['admin']}>
+              <RequireAuth allowRoles={['ADMIN']}>
                 <AdminDashboardPage />
               </RequireAuth>
             }
@@ -76,7 +77,7 @@ function App() {
           <Route
             path="/admin/reports"
             element={
-              <RequireAuth allowRoles={['admin']}>
+              <RequireAuth allowRoles={['ADMIN']}>
                 <AdminReportsPage />
               </RequireAuth>
             }
@@ -84,7 +85,7 @@ function App() {
           <Route
             path="/admin/users"
             element={
-              <RequireAuth allowRoles={['admin']}>
+              <RequireAuth allowRoles={['ADMIN']}>
                 <AdminUsersPage />
               </RequireAuth>
             }
@@ -92,7 +93,7 @@ function App() {
           <Route
             path="/admin/clubs"
             element={
-              <RequireAuth allowRoles={['admin']}>
+              <RequireAuth allowRoles={['ADMIN']}>
                 <AdminClubsPage />
               </RequireAuth>
             }
@@ -100,7 +101,7 @@ function App() {
           <Route
             path="/admin/applications"
             element={
-              <RequireAuth allowRoles={['admin']}>
+              <RequireAuth allowRoles={['ADMIN']}>
                 <AdminApplicationsPage />
               </RequireAuth>
             }
@@ -108,7 +109,7 @@ function App() {
           <Route
             path="/leader/dashboard"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderDashboardPage />
               </RequireAuth>
             }
@@ -116,7 +117,7 @@ function App() {
           <Route
             path="/leader/members"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderMembersPage />
               </RequireAuth>
             }
@@ -124,7 +125,7 @@ function App() {
           <Route
             path="/leader/projects"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderProjectsPage />
               </RequireAuth>
             }
@@ -132,7 +133,7 @@ function App() {
           <Route
             path="/leader/courses"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderCoursesPage />
               </RequireAuth>
             }
@@ -140,7 +141,7 @@ function App() {
           <Route
             path="/leader/assignments"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderAssignmentsPage />
               </RequireAuth>
             }
@@ -148,7 +149,7 @@ function App() {
           <Route
             path="/leader/clubs/new"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderCreateClubPage />
               </RequireAuth>
             }
@@ -156,7 +157,7 @@ function App() {
           <Route
             path="/leader/club"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderClubPage />
               </RequireAuth>
             }
@@ -164,15 +165,23 @@ function App() {
           <Route
             path="/leader/club/:id"
             element={
-              <RequireAuth allowRoles={['leader']}>
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
                 <LeaderClubDetailPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/leader/team-chat"
+            element={
+              <RequireAuth allowRoles={['CLUB_LEADER']}>
+                <LeaderTeamChatPage />
               </RequireAuth>
             }
           />
           <Route
             path="/student/dashboard"
             element={
-              <RequireAuth allowRoles={['student']}>
+              <RequireAuth allowRoles={['MEMBER']}>
                 <StudentDashboardPage />
               </RequireAuth>
             }
@@ -180,7 +189,7 @@ function App() {
           <Route
             path="/student/clubs"
             element={
-              <RequireAuth allowRoles={['student']}>
+              <RequireAuth allowRoles={['MEMBER']}>
                 <StudentClubPage />
               </RequireAuth>
             }
@@ -188,7 +197,7 @@ function App() {
           <Route
             path="/student/clubs/:id/collaboration"
             element={
-              <RequireAuth allowRoles={['student']}>
+              <RequireAuth allowRoles={['MEMBER']}>
                 <StudentCollaborationPage />
               </RequireAuth>
             }
@@ -196,7 +205,7 @@ function App() {
           <Route
             path="/student/profile"
             element={
-              <RequireAuth allowRoles={['student']}>
+              <RequireAuth allowRoles={['MEMBER']}>
                 <StudentProfilePage />
               </RequireAuth>
             }
@@ -204,7 +213,7 @@ function App() {
           <Route
             path="/student/courses"
             element={
-              <RequireAuth allowRoles={['student']}>
+              <RequireAuth allowRoles={['MEMBER']}>
                 <StudentCoursesPage />
               </RequireAuth>
             }
@@ -212,7 +221,7 @@ function App() {
           <Route
             path="/student/courses/:id"
             element={
-              <RequireAuth allowRoles={['student']}>
+              <RequireAuth allowRoles={['MEMBER']}>
                 <StudentCourseDetailPage />
               </RequireAuth>
             }

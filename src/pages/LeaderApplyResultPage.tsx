@@ -5,12 +5,15 @@ import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
+import { useGetLeaderApplicationStatusQuery } from '@/features/LeaderApplicationApi';
 
 type ResultState = {
   score: number;
+  passed: boolean;
   totalQuestions: number;
   attemptedAll: boolean;
   answeredCount: number;
+  categoryName?: string;
 };
 
 export default function LeaderApplyResultPage() {
@@ -25,23 +28,38 @@ export default function LeaderApplyResultPage() {
     }
   })();
 
-  const { score, totalQuestions, attemptedAll, answeredCount } = location.state ||
+  const { score, passed, totalQuestions, attemptedAll, answeredCount, categoryName } = location.state ||
     storedResult || {
       score: 0,
+      passed: false,
       totalQuestions: 6,
       attemptedAll: false,
-      answeredCount: 0
+      answeredCount: 0,
+      categoryName: '',
     };
 
   const safeAnsweredCount = Math.max(0, answeredCount);
-  const percentage =
-    safeAnsweredCount > 0 ? Math.round((score / safeAnsweredCount) * 100) : 0;
-  const passed = percentage >= 70;
+  const percentage = Math.max(0, Math.min(100, Math.round(score)));
   const notAnswered = Math.max(0, totalQuestions - safeAnsweredCount);
   const [retryError, setRetryError] = useState('');
+  const applySession = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem('leaderApplySession');
+      return raw ? (JSON.parse(raw) as { userId?: string; email?: string }) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+  const { data: applicationStatus } = useGetLeaderApplicationStatusQuery(
+    applySession?.userId ?? '',
+    {
+      skip: !applySession?.userId,
+      pollingInterval: 10000,
+    },
+  );
 
   const retryKey = useMemo(() => 'leaderApplyLastFailedAt', []);
-  const retryCooldownMs = 7 * 24 * 60 * 60 * 1000;
+  const retryCooldownMs = 24 * 60 * 60 * 1000;
 
   const radius = 95;
   const circumference = 2 * Math.PI * radius;
@@ -66,8 +84,8 @@ export default function LeaderApplyResultPage() {
       const elapsed = Date.now() - Number(lastFailedAt);
       if (!Number.isNaN(elapsed) && elapsed < retryCooldownMs) {
         const remainingMs = retryCooldownMs - elapsed;
-        const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
-        setRetryError(`You can retry after ${remainingDays} day(s). Please prepare and try again later.`);
+        const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
+        setRetryError(`You can retry after ${remainingHours} hour(s). Please prepare and try again later.`);
         return;
       }
     }
@@ -140,9 +158,28 @@ export default function LeaderApplyResultPage() {
                       <h2 className="text-2xl md:text-4xl font-semibold text-blue-900 mb-3">
                         Great job, you passed!
                       </h2>
-                      <p className="text-base md:text-lg text-slate-700">
-                        Your leader application is ready for review. We will contact you by email with next steps.
-                      </p>
+                      {applicationStatus?.reviewStatus === 'APPROVED' ? (
+                        <div className="space-y-2 text-base md:text-lg text-slate-700">
+                          <p>Your application is approved. Use these temporary credentials to log in:</p>
+                          <p>
+                            <span className="font-semibold text-slate-900">Email:</span>{' '}
+                            {applicationStatus.email}
+                          </p>
+                          <p>
+                            <span className="font-semibold text-slate-900">Temporary Password:</span>{' '}
+                            {applicationStatus.temporaryPassword ?? 'Not available yet'}
+                          </p>
+                        </div>
+                      ) : applicationStatus?.reviewStatus === 'REJECTED' ? (
+                        <p className="text-base md:text-lg text-slate-700">
+                          Your application was reviewed and rejected.
+                          {applicationStatus.reviewNote ? ` Reason: ${applicationStatus.reviewNote}` : ''}
+                        </p>
+                      ) : (
+                        <p className="text-base md:text-lg text-slate-700">
+                          Your leader application is pending admin review. This page checks status automatically.
+                        </p>
+                      )}
                     </>
                   ) : (
                     <>
@@ -172,7 +209,7 @@ export default function LeaderApplyResultPage() {
                 </div>
 
                 <p className="text-sm text-slate-500 mb-6">
-                  Completion required: all questions must be attempted.
+                  Category: <span className="font-semibold text-slate-700">{categoryName || 'N/A'}</span>
                 </p>
 
                 {retryError && (
@@ -180,19 +217,26 @@ export default function LeaderApplyResultPage() {
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-                  {passed ? (
+                  {passed && applicationStatus?.reviewStatus === 'APPROVED' ? (
                     <button
                       onClick={() => navigate('/login')}
                       className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Login
                     </button>
-                  ) : (
+                  ) : !passed ? (
                     <button
                       onClick={handleRetry}
                       className="px-8 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Retry Test
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="px-8 py-3 bg-slate-200 text-slate-600 font-semibold rounded-lg cursor-default"
+                    >
+                      Waiting for admin approval
                     </button>
                   )}
                   <button

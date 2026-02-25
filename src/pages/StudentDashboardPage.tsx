@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { BookOpen, Calendar, Flame, Target, Users, CheckCircle2, Menu } from 'lucide-react';
 import StudentSidebar from '@/components/student/StudentSidebar';
-import { clubs as baseClubs } from '@/data/clubs';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import { useGetActiveClubsQuery } from '@/features/ClubsApi';
+import { useGetUserMembershipsQuery } from '@/features/UsersApi';
 
 const upcomingSessions = [
   { title: 'Frontend Sync', time: 'Today · 4:30 PM', club: 'UI Builders' },
@@ -21,11 +22,16 @@ export default function StudentDashboardPage() {
   const authUser = useMemo(() => {
     try {
       const raw = localStorage.getItem('authUser');
-      return raw ? (JSON.parse(raw) as { email?: string }) : {};
+      return raw ? (JSON.parse(raw) as { id?: string; email?: string }) : {};
     } catch {
       return {};
     }
   }, []);
+
+  const { data: activeClubs = [] } = useGetActiveClubsQuery();
+  const { data: memberships = [] } = useGetUserMembershipsQuery(authUser.id ?? '', {
+    skip: !authUser.id,
+  });
 
   const studentProfile = useMemo(() => {
     try {
@@ -39,37 +45,33 @@ export default function StudentDashboardPage() {
 
   const displayName = studentProfile?.fullName || authUser.email?.split('@')[0] || 'Student';
 
-  const mergedClubs = useMemo(() => {
-    try {
-      const stored = localStorage.getItem('leaderCreatedClubs');
-      const leaderClubs = stored ? JSON.parse(stored) : [];
-      return [...leaderClubs, ...baseClubs];
-    } catch {
-      return baseClubs;
-    }
-  }, []);
-
   const joinedClubIds = useMemo(() => {
+    const fromMemberships = memberships
+      .filter((membership) => membership.status === 'active' && membership.clubId)
+      .map((membership) => String(membership.clubId));
+    if (fromMemberships.length > 0) {
+      return Array.from(new Set(fromMemberships));
+    }
     try {
       const raw = localStorage.getItem('studentJoinedClubs');
-      return raw ? (JSON.parse(raw) as number[]) : [];
+      return raw ? (JSON.parse(raw) as Array<number | string>).map((id) => String(id)) : [];
     } catch {
       return [];
     }
-  }, []);
+  }, [memberships]);
 
   const normalizedClubs = useMemo(
     () =>
-      mergedClubs.map((club) => ({
+      activeClubs.map((club) => ({
         ...club,
-        tags: club.tags ?? (club.category ? [club.category, 'Community', 'Projects'] : []),
-        stats: club.stats ?? { joinedMembers: 0, projects: club.projectsCount ?? 0, modules: club.modulesCount ?? 0 },
+        tags: [club.category?.name ?? 'Community', 'Projects'].filter(Boolean),
+        stats: { joinedMembers: 0, projects: 0, modules: 0 },
       })),
-    [mergedClubs]
+    [activeClubs]
   );
 
   const joinedClubs = useMemo(
-    () => normalizedClubs.filter((club) => joinedClubIds.includes(club.id)),
+    () => normalizedClubs.filter((club) => joinedClubIds.includes(String(club.id))),
     [joinedClubIds, normalizedClubs]
   );
 
@@ -85,7 +87,7 @@ export default function StudentDashboardPage() {
           clubId: number;
           clubName: string;
         }[]) : [];
-        return stored.filter((meeting) => joinedClubIds.includes(meeting.clubId));
+        return stored.filter((meeting) => joinedClubIds.includes(String(meeting.clubId)));
       } catch {
         return [];
       }
@@ -116,7 +118,7 @@ export default function StudentDashboardPage() {
           dueDate: string;
           clubId: number;
         }[]) : [];
-        return stored.filter((assignment) => joinedClubIds.includes(assignment.clubId));
+        return stored.filter((assignment) => joinedClubIds.includes(String(assignment.clubId)));
       } catch {
         return [];
       }
@@ -173,7 +175,7 @@ export default function StudentDashboardPage() {
         id: club.id,
         name: club.name,
         description: club.description,
-        image: club.image,
+        image: club.imageUrl,
         members: club.stats?.joinedMembers ?? 0,
         progress: 60 + index * 10,
       })),
@@ -202,7 +204,7 @@ export default function StudentDashboardPage() {
   const progressSummary = useMemo(() => {
     const total = focusAreas.reduce((sum, area) => sum + area.percent, 0);
     return Math.round(total / focusAreas.length);
-  }, []);
+  }, [focusAreas]);
 
   return (
     <div className="min-h-screen w-full bg-slate-100">

@@ -31,7 +31,7 @@ export default function RequireAuth({ children, allowRoles }: RequireAuthProps) 
   }
 
   if (
-    authUser?.role === 'leader' &&
+    authUser?.role === 'CLUB_LEADER' &&
     authUser?.mustChange &&
     location.pathname !== '/leader/change-password'
   ) {

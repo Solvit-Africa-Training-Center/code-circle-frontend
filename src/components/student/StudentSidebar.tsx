@@ -5,6 +5,7 @@ import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/student/dashboard' },
   { label: 'My Clubs', icon: Users, path: '/student/clubs' },
+  { label: 'Courses', icon: GraduationCap, path: '/student/courses' },
   { label: 'Profile', icon: UserCircle2, path: '/student/profile' },
 ];
 
@@ -30,7 +31,8 @@ export default function StudentSidebar({ variant = 'desktop' }: StudentSidebarPr
 
       <nav className="mt-8 flex-1 space-y-2">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive =
+            location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
           const Icon = item.icon;
           return (
             <Link
@@ -47,9 +49,6 @@ export default function StudentSidebar({ variant = 'desktop' }: StudentSidebarPr
             </Link>
           );
         })}
-        <div className="mt-4 rounded-xl border border-dashed border-blue-700 px-3 py-3 text-xs text-blue-100/80">
-          Courses and projects dashboards are coming next.
-        </div>
       </nav>
 
       <div className="mt-6 rounded-2xl bg-white/10 text-white p-4">

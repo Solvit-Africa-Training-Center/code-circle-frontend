@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import LeaderSidebar from '../components/leader/LeaderSidebar';
@@ -9,25 +9,15 @@ import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 import { getLeaderDisplayName } from '@/utils/authUser';
 import { getAuthUser } from '@/utils/authUser';
-
-const baseCategories = [
-  'Web Development',
-  'Software Development',
-  'Mobile App Development',
-  'Machine Learning',
-  'Artificial Intelligence',
-  'Data Engineering',
-  'UI/UX Design',
-  'Python Programming',
-  'DevOps Engineering'
-];
+import { useGetActiveCategoriesQuery } from '@/features/CategoriesApi';
+import { useCreateClubMutation } from '@/features/ClubsApi';
 
 export default function LeaderCreateClubPage() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const leaderName = getLeaderDisplayName();
   const authUser = getAuthUser();
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [formState, setFormState] = useState({
     name: '',
     description: ''
@@ -35,26 +25,123 @@ export default function LeaderCreateClubPage() {
   const [imagePreview, setImagePreview] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { data: apiCategories = [] } = useGetActiveCategoriesQuery();
+  const [createClub, { isLoading: isCreating }] = useCreateClubMutation();
 
-  const categories = useMemo(() => {
-    const stored = (() => {
+  const joinedCategory = useMemo(() => {
+    const authEmail = authUser?.email?.toLowerCase();
+    if (!authEmail) return '';
+
+    const fromLeaderApplySelection = (() => {
       try {
-        const raw = localStorage.getItem('clubCategories');
-        const parsed = raw ? (JSON.parse(raw) as Array<string | { id: number; name: string }>) : [];
-        return parsed.map((item) => (typeof item === 'string' ? item : item.name));
+        const raw = sessionStorage.getItem('leaderApplySelection');
+        if (!raw) return '';
+        const parsed = JSON.parse(raw) as { categoryName?: string };
+        return parsed.categoryName?.trim() ?? '';
       } catch {
-        return [];
+        return '';
       }
     })();
-    const merged = [...baseCategories, ...stored].map((item) => item.trim()).filter(Boolean);
-    return Array.from(new Set(merged));
-  }, []);
+    if (fromLeaderApplySelection) return fromLeaderApplySelection;
 
-  const handleSubmit = (e: React.FormEvent) => {
+    const fromLeaderApplySession = (() => {
+      try {
+        const raw = sessionStorage.getItem('leaderApplySession');
+        if (!raw) return '';
+        const parsed = JSON.parse(raw) as { categoryName?: string };
+        return parsed.categoryName?.trim() ?? '';
+      } catch {
+        return '';
+      }
+    })();
+    if (fromLeaderApplySession) return fromLeaderApplySession;
+
+    const fromExistingLeaderClub = (() => {
+      try {
+        const raw = localStorage.getItem('leaderCreatedClubs');
+        const clubs = raw
+          ? (JSON.parse(raw) as Array<{ leaderEmail?: string; category?: string }>)
+          : [];
+        const matched = clubs.find(
+          (club) =>
+            club.leaderEmail?.toLowerCase() === authEmail &&
+            typeof club.category === 'string' &&
+            club.category.trim(),
+        );
+        return matched?.category?.trim() ?? '';
+      } catch {
+        return '';
+      }
+    })();
+    if (fromExistingLeaderClub) return fromExistingLeaderClub;
+
+    const fromLeaderApplication = (() => {
+      try {
+        const raw = localStorage.getItem('leaderApplications');
+        const apps = raw
+          ? (JSON.parse(raw) as Array<{ email?: string; category?: string; status?: string }>)
+          : [];
+        const matched = apps.find(
+          (app) =>
+            app.email?.toLowerCase() === authEmail &&
+            typeof app.category === 'string' &&
+            app.category.trim() &&
+            app.status !== 'denied',
+        );
+        return matched?.category?.trim() ?? '';
+      } catch {
+        return '';
+      }
+    })();
+    return fromLeaderApplication;
+  }, [authUser?.email]);
+
+  const categories = useMemo(() => {
+    if (!joinedCategory) {
+      return [] as Array<{ id: string; name: string }>;
+    }
+
+    const byName = apiCategories.find(
+      (item) => item.name?.trim().toLowerCase() === joinedCategory.toLowerCase(),
+    );
+
+    if (byName) {
+      return [{ id: byName.id, name: byName.name }];
+    }
+
+    const fromSession = (() => {
+      try {
+        const raw = sessionStorage.getItem('leaderApplySelection');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { categoryId?: string; categoryName?: string };
+        if (
+          parsed.categoryId &&
+          parsed.categoryName?.trim().toLowerCase() === joinedCategory.toLowerCase()
+        ) {
+          return { id: parsed.categoryId, name: parsed.categoryName.trim() };
+        }
+      } catch {
+        return null;
+      }
+      return null;
+    })();
+
+    return fromSession ? [fromSession] : [{ id: '', name: joinedCategory }];
+  }, [apiCategories, joinedCategory]);
+
+  useEffect(() => {
+    if (categories.length === 1) {
+      setSelectedCategoryId(categories[0].id);
+    }
+  }, [categories]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nextErrors: Record<string, string> = {};
 
-    if (!selectedCategory) {
+    if (!joinedCategory) {
+      nextErrors.category = 'No joined category found for this leader account.';
+    } else if (!selectedCategoryId) {
       nextErrors.category = 'Please choose a club category.';
     }
     if (!formState.name.trim()) {
@@ -63,30 +150,32 @@ export default function LeaderCreateClubPage() {
     if (!formState.description.trim()) {
       nextErrors.description = 'Club description is required.';
     }
-    if (!imageFile) {
+    if (!imagePreview) {
       nextErrors.image = 'Please upload a club image.';
     }
-
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const stored = localStorage.getItem('leaderCreatedClubs');
-    const existing = stored ? JSON.parse(stored) : [];
-    const createdClub = {
-      id: Date.now(),
-      name: formState.name.trim(),
-      category: selectedCategory,
-      description: formState.description.trim(),
-      image: imagePreview,
-      projectsCount: 0,
-      modulesCount: 0,
-      stats: { joinedMembers: 0 },
-      leaderEmail: authUser?.email ?? ''
-    };
-    localStorage.setItem('leaderCreatedClubs', JSON.stringify([createdClub, ...existing]));
-    addNotification(`Club created: ${createdClub.name}`);
-    showToast('Club created successfully.');
-    navigate('/leader/club');
+    try {
+      const createdClub = await createClub({
+        name: formState.name.trim(),
+        categoryId: selectedCategoryId,
+        description: formState.description.trim(),
+      }).unwrap();
+
+      addNotification(`Club created: ${createdClub.name}`);
+      showToast('Club created successfully.');
+      navigate('/leader/club');
+    } catch (err) {
+      const apiMessage = (err as { data?: { message?: string } })?.data?.message;
+      setErrors({
+        ...nextErrors,
+        submit:
+          typeof apiMessage === 'string' && apiMessage.trim()
+            ? apiMessage
+            : 'Failed to create club.',
+      });
+    }
   };
 
   return (
@@ -131,7 +220,7 @@ export default function LeaderCreateClubPage() {
           <div className="mt-8">
             <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Create New Club</h1>
             <p className="text-sm text-slate-500 mt-2">
-              Choose a category first, then add your club details.
+              Your club category is locked to the category you joined.
             </p>
           </div>
 
@@ -143,19 +232,22 @@ export default function LeaderCreateClubPage() {
                   Club Category
                 </label>
                 <select
-                  value={selectedCategory}
+                  value={selectedCategoryId}
                   onChange={(e) => {
-                    setSelectedCategory(e.target.value);
+                    setSelectedCategoryId(e.target.value);
                     if (errors.category) setErrors({ ...errors, category: '' });
                   }}
+                  disabled={categories.length <= 1}
                   className={`w-full rounded-lg border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
                     errors.category ? 'border-red-500' : 'border-slate-300'
                   }`}
                 >
-                  <option value="">Select a category</option>
+                  <option value="">
+                    {joinedCategory ? 'Select your category' : 'No category assigned'}
+                  </option>
                   {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
+                    <option key={category.name} value={category.id}>
+                      {category.name}
                     </option>
                   ))}
                 </select>
@@ -237,6 +329,9 @@ export default function LeaderCreateClubPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              {errors.submit && (
+                <p className="w-full text-sm text-red-600">{errors.submit}</p>
+              )}
               <button
                 type="button"
                 onClick={() => navigate('/leader/dashboard')}
@@ -246,9 +341,10 @@ export default function LeaderCreateClubPage() {
               </button>
               <button
                 type="submit"
-                className="rounded-full bg-blue-900 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                disabled={!joinedCategory || isCreating}
+                className="rounded-full bg-blue-900 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
               >
-                Create Club
+                {isCreating ? 'Creating...' : 'Create Club'}
               </button>
             </div>
           </form>

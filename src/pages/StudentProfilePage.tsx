@@ -3,9 +3,11 @@ import { Mail, MapPin, ShieldCheck, Trophy, UserCircle2, Menu } from 'lucide-rea
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as baseClubs } from '@/data/clubs';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import { useGetActiveClubsQuery } from '@/features/ClubsApi';
 
 export default function StudentProfilePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { data: backendClubs = [] } = useGetActiveClubsQuery();
   const authUser = useMemo(() => {
     try {
       const raw = localStorage.getItem('authUser');
@@ -28,7 +30,7 @@ export default function StudentProfilePage() {
   const joinedClubIds = useMemo(() => {
     try {
       const raw = localStorage.getItem('studentJoinedClubs');
-      return raw ? (JSON.parse(raw) as number[]) : [];
+      return raw ? (JSON.parse(raw) as Array<number | string>).map((id) => String(id)) : [];
     } catch {
       return [];
     }
@@ -38,14 +40,14 @@ export default function StudentProfilePage() {
     try {
       const stored = localStorage.getItem('leaderCreatedClubs');
       const leaderClubs = stored ? JSON.parse(stored) : [];
-      return [...leaderClubs, ...baseClubs];
+      return [...backendClubs, ...leaderClubs, ...baseClubs];
     } catch {
-      return baseClubs;
+      return [...backendClubs, ...baseClubs];
     }
-  }, []);
+  }, [backendClubs]);
 
   const joinedClubs = useMemo(
-    () => mergedClubs.filter((club) => joinedClubIds.includes(club.id)),
+    () => mergedClubs.filter((club) => joinedClubIds.includes(String(club.id))),
     [joinedClubIds, mergedClubs]
   );
 
@@ -125,7 +127,7 @@ export default function StudentProfilePage() {
                 {joinedClubs.map((club) => (
                   <div key={club.id} className="rounded-2xl border border-slate-200 p-4">
                     <p className="text-sm font-semibold text-slate-900">{club.name}</p>
-                    <p className="text-xs text-slate-500 mt-1">{club.category}</p>
+                    <p className="text-xs text-slate-500 mt-1">{club.category?.name ?? club.category ?? 'Unknown category'}</p>
                   </div>
                 ))}
                 {joinedClubs.length === 0 && (

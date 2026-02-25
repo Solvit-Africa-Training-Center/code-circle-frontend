@@ -2,7 +2,15 @@ import { Menu, Search, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
-import { clubs as baseClubs } from '@/data/clubs';
+import {
+  useCreateCategoryMutation,
+  useDeleteCategoryMutation,
+  useGetActiveCategoriesQuery,
+  useUpdateCategoryMutation,
+} from '@/features/CategoriesApi';
+import { useGeneratePoolMutation } from '@/features/QuestionPoolApi';
+import { useGetActiveClubsQuery } from '@/features/ClubsApi';
+import type { Category } from '@/types/category';
 
 export default function AdminClubsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -10,41 +18,35 @@ export default function AdminClubsPage() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
-  const [categoryForm, setCategoryForm] = useState({ name: '', icon: '' });
-  const [categoryError, setCategoryError] = useState('');
-  const [storedCategories, setStoredCategories] = useState<
-    { id: number; name: string; icon: string }[]
-  >(() => {
-    try {
-      const raw = localStorage.getItem('clubCategories');
-      const parsed = raw ? (JSON.parse(raw) as Array<string | { id: number; name: string; icon: string }>) : [];
-      return parsed.map((item, index) =>
-        typeof item === 'string'
-          ? { id: Date.now() + index, name: item, icon: '🏷️' }
-          : item
-      );
-    } catch {
-      return [];
-    }
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    icon: '',
+    description: '',
   });
+  const [categoryError, setCategoryError] = useState('');
+  const [categorySuccess, setCategorySuccess] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+
+  const {
+    data: storedCategories = [],
+    isLoading: isCategoriesLoading,
+    refetch,
+  } = useGetActiveCategoriesQuery();
+  const [createCategory, { isLoading: isCreatingCategory }] = useCreateCategoryMutation();
+  const [updateCategory, { isLoading: isUpdatingCategory }] = useUpdateCategoryMutation();
+  const [deleteCategory, { isLoading: isDeletingCategory }] = useDeleteCategoryMutation();
+  const [generatePool, { isLoading: isGeneratingPool }] = useGeneratePoolMutation();
+  const { data: backendClubs = [], isLoading: isClubsLoading } = useGetActiveClubsQuery();
+
   const pageSize = 6;
 
-  const clubs = useMemo(() => {
-    const leaderCreated = (() => {
-      try {
-        const raw = localStorage.getItem('leaderCreatedClubs');
-        return raw ? (JSON.parse(raw) as typeof baseClubs) : [];
-      } catch {
-        return [];
-      }
-    })();
-    return [...leaderCreated, ...baseClubs];
-  }, []);
+  const clubs = backendClubs;
 
   const categories = useMemo(() => {
-    const clubCategories = clubs.map((club) => club.category).filter(Boolean);
-    const storedNames = storedCategories.map((category) => category.name);
+    const clubCategories = clubs.map((club) => club.category?.name || '').filter(Boolean);
+    const storedNames = storedCategories.map((category: Category) => category.name);
     const merged = [...clubCategories, ...storedNames]
       .map((item) => item.trim())
       .filter(Boolean);
@@ -54,15 +56,14 @@ export default function AdminClubsPage() {
   const filteredClubs = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
     return clubs.filter((club) => {
-      const matchesCategory = selectedCategory === 'All' || club.category === selectedCategory;
+      const clubCategory = club.category?.name || '';
+      const matchesCategory = selectedCategory === 'All' || clubCategory === selectedCategory;
       if (!matchesCategory) return false;
       if (!search) return true;
-      const tagMatch = club.tags?.some((tag) => tag.toLowerCase().includes(search));
       return (
         club.name.toLowerCase().includes(search) ||
-        club.description.toLowerCase().includes(search) ||
-        club.category.toLowerCase().includes(search) ||
-        tagMatch
+        (club.description || '').toLowerCase().includes(search) ||
+        clubCategory.toLowerCase().includes(search)
       );
     });
   }, [clubs, searchTerm, selectedCategory]);
@@ -83,51 +84,69 @@ export default function AdminClubsPage() {
     }
   }, [currentPage, totalPages]);
 
-  const persistCategories = (next: { id: number; name: string; icon: string }[]) => {
-    setStoredCategories(next);
-    localStorage.setItem('clubCategories', JSON.stringify(next));
+  const getApiMessage = (err: unknown, fallback: string) => {
+    const message = (err as { data?: { message?: string } })?.data?.message;
+    return typeof message === 'string' && message.trim() ? message : fallback;
   };
 
   const openCreateCategory = () => {
     setEditingCategoryId(null);
-    setCategoryForm({ name: '', icon: '' });
+    setCategoryForm({ name: '', icon: '', description: '' });
     setCategoryError('');
+    setCategorySuccess('');
     setShowCategoryModal(true);
   };
 
-  const openEditCategory = (category: { id: number; name: string; icon: string }) => {
+  const openEditCategory = (category: Category) => {
     setEditingCategoryId(category.id);
-    setCategoryForm({ name: category.name, icon: category.icon });
+    setCategoryForm({
+      name: category.name,
+      icon: category.icon ?? '',
+      description: category.description ?? '',
+    });
     setCategoryError('');
+    setCategorySuccess('');
     setShowCategoryModal(true);
   };
 
-  const handleSaveCategory = () => {
+  const handleSaveCategory = async () => {
     const name = categoryForm.name.trim();
-    const icon = categoryForm.icon.trim() || '🏷️';
+    const icon = categoryForm.icon.trim() || 'Tag';
+    const description = categoryForm.description.trim();
+
     if (!name) {
       setCategoryError('Category name is required.');
       return;
     }
+
     const exists = storedCategories.some(
       (item) =>
         item.name.toLowerCase() === name.toLowerCase() &&
-        item.id !== editingCategoryId
+        item.id !== editingCategoryId,
     );
+
     if (exists) {
       setCategoryError('Category already exists.');
       return;
     }
-    if (editingCategoryId) {
-      const updated = storedCategories.map((item) =>
-        item.id === editingCategoryId ? { ...item, name, icon } : item
-      );
-      persistCategories(updated);
-    } else {
-      const next = [{ id: Date.now(), name, icon }, ...storedCategories];
-      persistCategories(next);
+
+    try {
+      if (editingCategoryId) {
+        await updateCategory({
+          id: editingCategoryId,
+          body: { name, icon, description: description || undefined },
+        }).unwrap();
+      } else {
+        await createCategory({ name, icon, description: description || undefined }).unwrap();
+      }
+
+      setShowCategoryModal(false);
+      setCategoryError('');
+      setCategorySuccess('');
+      await refetch();
+    } catch (err) {
+      setCategoryError(getApiMessage(err, 'Failed to save category.'));
     }
-    setShowCategoryModal(false);
   };
 
   const handleIconUpload = (file?: File | null) => {
@@ -135,6 +154,7 @@ export default function AdminClubsPage() {
       setCategoryForm((prev) => ({ ...prev, icon: '' }));
       return;
     }
+
     const reader = new FileReader();
     reader.onload = () => {
       const result = String(reader.result || '');
@@ -143,11 +163,43 @@ export default function AdminClubsPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleDeleteCategory = (categoryId: number) => {
-    if (!confirm('Delete this category?')) return;
-    const next = storedCategories.filter((item) => item.id !== categoryId);
-    persistCategories(next);
+  const handleDeleteCategory = async (categoryId: string) => {
+    try {
+      await deleteCategory(categoryId).unwrap();
+      await refetch();
+      setShowDeleteModal(false);
+      setCategoryToDelete(null);
+    } catch (err) {
+      setCategoryError(getApiMessage(err, 'Failed to delete category.'));
+    }
   };
+
+  const handleGenerateCategoryQuestions = async (category: Category) => {
+    setCategoryError('');
+    setCategorySuccess('');
+    try {
+      const generated = await generatePool({
+        poolType: 'CATEGORY',
+        categoryId: category.id,
+        difficulty: 'INTERMEDIATE',
+      }).unwrap();
+
+      setCategorySuccess(
+        `Generated ${generated.count} questions for "${category.name}".`,
+      );
+    } catch (err) {
+      setCategoryError(
+        getApiMessage(err, `Failed to generate questions for "${category.name}".`),
+      );
+    }
+  };
+
+  const openDeleteConfirmation = (category: Category) => {
+    setCategoryToDelete(category);
+    setShowDeleteModal(true);
+  };
+
+  const isSavingCategory = isCreatingCategory || isUpdatingCategory;
 
   return (
     <div className="min-h-screen w-full bg-slate-100">
@@ -188,10 +240,25 @@ export default function AdminClubsPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 mt-2">
-                Add, edit, and delete categories available for leaders.
+                Add, edit, and delete categories. Category management is admin-only.
               </p>
+              {categorySuccess && (
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                  {categorySuccess}
+                </div>
+              )}
+              {categoryError && !showCategoryModal && (
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {categoryError}
+                </div>
+              )}
               <div className="mt-4 space-y-3">
-                {storedCategories.length === 0 && (
+                {isCategoriesLoading && (
+                  <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">
+                    Loading categories...
+                  </div>
+                )}
+                {!isCategoriesLoading && storedCategories.length === 0 && (
                   <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">
                     No custom categories yet.
                   </div>
@@ -209,11 +276,18 @@ export default function AdminClubsPage() {
                           className="h-6 w-6 rounded-md object-cover"
                         />
                       ) : (
-                        <span className="text-base">{category.icon || '🏷️'}</span>
+                        <span className="text-base">{category.icon || 'Tag'}</span>
                       )}
                       <span className="font-medium">{category.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleGenerateCategoryQuestions(category)}
+                        disabled={isGeneratingPool}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700 disabled:opacity-60"
+                      >
+                        Generate Qs
+                      </button>
                       <button
                         onClick={() => openEditCategory(category)}
                         className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600"
@@ -222,8 +296,9 @@ export default function AdminClubsPage() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDeleteCategory(category.id)}
-                        className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700"
+                        onClick={() => openDeleteConfirmation(category)}
+                        disabled={isDeletingCategory}
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700 disabled:opacity-60"
                       >
                         <Trash2 className="h-3 w-3" />
                         Delete
@@ -267,21 +342,19 @@ export default function AdminClubsPage() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {isClubsLoading && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
+                Loading clubs...
+              </div>
+            )}
             {pagedClubs.map((club) => (
               <div key={club.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{club.category}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{club.category?.name || 'Unknown category'}</p>
                 <p className="mt-2 text-lg font-semibold text-slate-900">{club.name}</p>
-                <p className="text-sm text-slate-600 mt-2">{club.description}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {(club.tags?.slice(0, 4) ?? []).map((tag) => (
-                    <span key={tag} className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                <p className="text-sm text-slate-600 mt-2">{club.description || 'No description'}</p>
               </div>
             ))}
-            {pagedClubs.length === 0 && (
+            {!isClubsLoading && pagedClubs.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
                 No clubs match your filters yet.
               </div>
@@ -327,6 +400,42 @@ export default function AdminClubsPage() {
         </main>
       </div>
 
+      {showDeleteModal && categoryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white shadow-2xl">
+            <div className="border-b border-rose-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Delete Category</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                This action will deactivate <span className="font-semibold text-slate-800">{categoryToDelete.name}</span>.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                Existing clubs keep their current category label, but this category will no longer be selectable.
+              </div>
+            </div>
+            <div className="flex items-center gap-3 border-t border-slate-200 px-6 py-4">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setCategoryToDelete(null);
+                }}
+                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteCategory(categoryToDelete.id)}
+                disabled={isDeletingCategory}
+                className="flex-1 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+              >
+                {isDeletingCategory ? 'Deleting...' : 'Delete Category'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200">
@@ -338,7 +447,7 @@ export default function AdminClubsPage() {
                 onClick={() => setShowCategoryModal(false)}
                 className="text-slate-500 hover:text-slate-700"
               >
-                ×
+                x
               </button>
             </div>
             <div className="px-6 py-5 space-y-4">
@@ -349,7 +458,7 @@ export default function AdminClubsPage() {
                     {categoryForm.icon?.startsWith('data:') ? (
                       <img src={categoryForm.icon} alt="Category icon" className="h-full w-full object-cover" />
                     ) : (
-                      <span className="text-xl">{categoryForm.icon || '🏷️'}</span>
+                      <span className="text-xl">{categoryForm.icon || 'Tag'}</span>
                     )}
                   </div>
                   <div className="flex-1 space-y-2">
@@ -370,7 +479,7 @@ export default function AdminClubsPage() {
                       type="text"
                       value={categoryForm.icon}
                       onChange={(event) => setCategoryForm({ ...categoryForm, icon: event.target.value })}
-                      placeholder="Or use emoji (e.g. ☁️)"
+                      placeholder="Icon text or emoji (optional)"
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
                     />
                   </div>
@@ -392,6 +501,20 @@ export default function AdminClubsPage() {
                 />
                 {categoryError && <p className="mt-1 text-xs text-red-600">{categoryError}</p>}
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  rows={3}
+                  value={categoryForm.description}
+                  onChange={(event) =>
+                    setCategoryForm({ ...categoryForm, description: event.target.value })
+                  }
+                  placeholder="Short summary for this category"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-3 border-t border-slate-200 px-6 py-4">
               <button
@@ -402,9 +525,10 @@ export default function AdminClubsPage() {
               </button>
               <button
                 onClick={handleSaveCategory}
-                className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                disabled={isSavingCategory}
+                className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                Save
+                {isSavingCategory ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>

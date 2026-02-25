@@ -4,14 +4,22 @@ import {
   FolderKanban,
   LayoutDashboard,
   LogOut,
-  Settings,
+  MessagesSquare,
   Users
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 
 type LeaderSidebarProps = {
-  active: 'dashboard' | 'members' | 'projects' | 'club' | 'create' | 'courses' | 'assignments';
+  active:
+    | 'dashboard'
+    | 'members'
+    | 'projects'
+    | 'club'
+    | 'create'
+    | 'courses'
+    | 'assignments'
+    | 'team-chat';
   variant?: 'desktop' | 'mobile';
 };
 
@@ -74,9 +82,12 @@ export default function LeaderSidebar({ active, variant = 'desktop' }: LeaderSid
             <ClipboardCheck className="h-4 w-4" />
             Assignments
           </button>
-          <button className={baseItem}>
-            <Settings className="h-4 w-4" />
-            Settings
+          <button
+            className={active === 'team-chat' ? activeItem : baseItem}
+            onClick={() => navigate('/leader/team-chat')}
+          >
+            <MessagesSquare className="h-4 w-4" />
+            Team Chat
           </button>
         </nav>
       </div>

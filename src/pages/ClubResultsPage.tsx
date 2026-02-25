@@ -5,6 +5,7 @@ import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
+import MemberPageLayout from '@/components/student/MemberPageLayout';
 
 export default function ClubResultsPage() {
   const { id } = useParams();
@@ -27,11 +28,11 @@ export default function ClubResultsPage() {
       answeredCount: 0
     };
 
-  const safeAnsweredCount = Math.max(0, answeredCount);
-  const percentage =
-    safeAnsweredCount > 0 ? Math.round((score / safeAnsweredCount) * 100) : 0;
+  const safeAnsweredCount = Math.max(0, Number(answeredCount) || 0);
+  const safeScore = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+  const percentage = safeScore;
   const passed = percentage >= 70;
-  const clubId = Number(id ?? 0);
+  const clubId = String(id ?? '');
   const notAnswered = Math.max(0, totalQuestions - safeAnsweredCount);
   const [retryError, setRetryError] = useState('');
 
@@ -56,7 +57,7 @@ export default function ClubResultsPage() {
   useEffect(() => {
     let pending:
       | {
-          clubId: number;
+          clubId: string;
           email: string;
           fullName: string;
         }
@@ -66,11 +67,11 @@ export default function ClubResultsPage() {
       const pendingRaw = sessionStorage.getItem('pendingMemberInfo');
       if (pendingRaw) {
         const parsed = JSON.parse(pendingRaw) as {
-          clubId: number;
+          clubId: string;
           email: string;
           fullName: string;
         };
-        if (parsed.clubId === clubId) {
+        if (String(parsed.clubId) === clubId) {
           pending = parsed;
         }
       }
@@ -83,7 +84,7 @@ export default function ClubResultsPage() {
         if (pending) {
           const memberRaw = localStorage.getItem('studentMembers');
           const existing = memberRaw
-            ? (JSON.parse(memberRaw) as { clubId?: number; email: string; fullName: string }[])
+            ? (JSON.parse(memberRaw) as { clubId?: string; email: string; fullName: string }[])
             : [];
           const next = [
             ...existing.filter((m) => m.email !== pending.email),
@@ -92,7 +93,7 @@ export default function ClubResultsPage() {
           localStorage.setItem('studentMembers', JSON.stringify(next));
 
           const joinedRaw = localStorage.getItem('studentJoinedClubs');
-          const joined = joinedRaw ? (JSON.parse(joinedRaw) as number[]) : [];
+          const joined = joinedRaw ? (JSON.parse(joinedRaw) as string[]) : [];
           localStorage.setItem(
             'studentJoinedClubs',
             JSON.stringify(Array.from(new Set([...joined, pending.clubId])))
@@ -100,7 +101,7 @@ export default function ClubResultsPage() {
 
           const membersRaw = localStorage.getItem('clubMembers');
           const membersByClub = membersRaw
-            ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName: string }[]>)
+            ? (JSON.parse(membersRaw) as Record<string, { email: string; fullName: string }[]>)
             : {};
           const currentMembers = membersByClub[pending.clubId] || [];
           membersByClub[pending.clubId] = [
@@ -111,9 +112,9 @@ export default function ClubResultsPage() {
 
           const createdRaw = localStorage.getItem('leaderCreatedClubs');
           if (createdRaw) {
-            const created = JSON.parse(createdRaw) as Array<{ id: number; stats?: { joinedMembers: number } }>;
+            const created = JSON.parse(createdRaw) as Array<{ id: string | number; stats?: { joinedMembers: number } }>;
             const nextCreated = created.map((clubItem) => {
-              if (clubItem.id !== pending.clubId) return clubItem;
+              if (String(clubItem.id) !== String(pending.clubId)) return clubItem;
               return {
                 ...clubItem,
                 stats: { joinedMembers: (membersByClub[pending.clubId] || []).length }
@@ -133,8 +134,8 @@ export default function ClubResultsPage() {
     if (!passed) {
       try {
         const joinedRaw = localStorage.getItem('studentJoinedClubs');
-        const joined = joinedRaw ? (JSON.parse(joinedRaw) as number[]) : [];
-        const nextJoined = joined.filter((joinedClubId) => joinedClubId !== clubId);
+        const joined = joinedRaw ? (JSON.parse(joinedRaw) as string[]) : [];
+        const nextJoined = joined.filter((joinedClubId) => String(joinedClubId) !== clubId);
         localStorage.setItem('studentJoinedClubs', JSON.stringify(nextJoined));
       } catch {
         // Ignore cleanup errors for demo flow
@@ -143,13 +144,13 @@ export default function ClubResultsPage() {
       if (pending) {
         try {
           const joinedRaw = localStorage.getItem('studentJoinedClubs');
-          const joined = joinedRaw ? (JSON.parse(joinedRaw) as number[]) : [];
-          const nextJoined = joined.filter((joinedClubId) => joinedClubId !== pending.clubId);
+          const joined = joinedRaw ? (JSON.parse(joinedRaw) as string[]) : [];
+          const nextJoined = joined.filter((joinedClubId) => String(joinedClubId) !== String(pending.clubId));
           localStorage.setItem('studentJoinedClubs', JSON.stringify(nextJoined));
 
           const membersRaw = localStorage.getItem('clubMembers');
           const membersByClub = membersRaw
-            ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName?: string }[]>)
+            ? (JSON.parse(membersRaw) as Record<string, { email: string; fullName?: string }[]>)
             : {};
           const currentMembers = membersByClub[pending.clubId] || [];
           membersByClub[pending.clubId] = currentMembers.filter((member) => member.email !== pending.email);
@@ -183,8 +184,9 @@ export default function ClubResultsPage() {
   };
 
   return (
-    <div className="w-full overflow-x-hidden bg-white min-h-screen flex flex-col">
-      <Header />
+    <MemberPageLayout>
+      <div className="w-full overflow-x-hidden bg-white min-h-screen flex flex-col">
+        <Header />
 
       {/* Page Title Section */}
       <div className="relative w-full h-[250px] md:h-[280px] flex items-start justify-center overflow-hidden">
@@ -276,8 +278,8 @@ export default function ClubResultsPage() {
                         Congratulations, You Passed!
                       </h2>
                       <p className="text-base md:text-lg text-slate-700">
-                        Use the email you submitted in the member form and the default password
-                        <span className="font-semibold"> student123</span> to login.
+                        Your login credentials have been sent to your email. Use
+                        the email and temporary password from that message to login.
                       </p>
                     </>
                   ) : (
@@ -314,7 +316,7 @@ export default function ClubResultsPage() {
                 <div className="grid grid-cols-3 gap-3 text-center mb-6">
                   <div className="rounded-xl bg-slate-50 p-3 border border-slate-200">
                     <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Score</p>
-                    <p className="text-xl font-semibold text-slate-900 mt-1">{score}</p>
+                    <p className="text-xl font-semibold text-slate-900 mt-1">{safeScore}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3 border border-slate-200">
                     <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total</p>
@@ -363,7 +365,8 @@ export default function ClubResultsPage() {
         </div>
       </div>
 
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </MemberPageLayout>
   );
 }

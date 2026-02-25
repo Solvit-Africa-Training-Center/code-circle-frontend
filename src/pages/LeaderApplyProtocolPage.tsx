@@ -22,6 +22,13 @@ export default function LeaderApplyProtocolPage() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(() => getScreenStream());
   const [mediaError, setMediaError] = useState('');
 
+  useEffect(() => {
+    const session = sessionStorage.getItem('leaderApplySession');
+    if (!session) {
+      navigate('/leader/apply/form', { replace: true });
+    }
+  }, [navigate]);
+
   const guidelines = [
     'This test verifies your leadership readiness.',
     'You must score 70% or higher to pass.',

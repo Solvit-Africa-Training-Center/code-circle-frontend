@@ -1,115 +1,112 @@
-import { CalendarCheck, ChartLine, ClipboardCheck, FolderKanban, Search, Users, Plus, Menu } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import {
+  BookOpen,
+  ClipboardCheck,
+  FolderKanban,
+  Menu,
+  MessagesSquare,
+  Search,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import LeaderSidebar from '../components/leader/LeaderSidebar';
 import LeaderNotificationsBell from '../components/leader/LeaderNotificationsBell';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 import { getAuthUser, getLeaderDisplayName } from '@/utils/authUser';
-import { clubs as baseClubs } from '@/data/clubs';
-import { addNotification } from '@/utils/notifications';
-import { showToast } from '@/utils/toast';
+import { useGetClubMembersQuery, useGetCreatorClubsQuery } from '@/features/ClubsApi';
+import { useGetCoursesByClubIdsQuery } from '@/features/CoursesApi';
+import { useGetAssignmentsByCourseIdsQuery } from '@/features/AssignmentsApi';
+import { useGetProjectsByCourseIdsQuery } from '@/features/ProjectsApi';
 
 export default function LeaderDashboardPage() {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedClubId, setSelectedClubId] = useState('');
   const leaderName = getLeaderDisplayName();
-  const [showMeetingModal, setShowMeetingModal] = useState(false);
-  const [meetingErrors, setMeetingErrors] = useState<Record<string, string>>({});
-  const [meetingForm, setMeetingForm] = useState({
-    title: '',
-    date: '',
-    time: '',
-    location: '',
-    notes: '',
-    clubId: ''
+  const creatorId = getAuthUser()?.id ?? '';
+
+  const { data: creatorClubs = [], isLoading: loadingClubs } = useGetCreatorClubsQuery(
+    creatorId,
+    { skip: !creatorId }
+  );
+
+  const activeClubId = selectedClubId || creatorClubs[0]?.id || '';
+  const activeClub = creatorClubs.find((club) => club.id === activeClubId);
+  const clubIds = useMemo(() => creatorClubs.map((club) => club.id), [creatorClubs]);
+
+  const { data: activeClubMembers = [] } = useGetClubMembersQuery(activeClubId, {
+    skip: !activeClubId,
   });
-  const [meetings, setMeetings] = useState(() => {
-    try {
-      const raw = localStorage.getItem('leaderMeetings');
-      return raw ? (JSON.parse(raw) as {
-        id: number;
-        title: string;
-        date: string;
-        time: string;
-        location: string;
-        notes: string;
-        clubId: number;
-        clubName: string;
-        createdAt: string;
-      }[]) : [];
-    } catch {
-      return [];
-    }
+  const { data: courses = [] } = useGetCoursesByClubIdsQuery(clubIds, {
+    skip: clubIds.length === 0,
+  });
+  const courseIds = useMemo(() => courses.map((course) => course.id), [courses]);
+  const { data: assignments = [] } = useGetAssignmentsByCourseIdsQuery(courseIds, {
+    skip: courseIds.length === 0,
+  });
+  const { data: projects = [] } = useGetProjectsByCourseIdsQuery(courseIds, {
+    skip: courseIds.length === 0,
   });
 
-  const recentAssignments = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('leaderAssignments');
-      const stored = raw ? (JSON.parse(raw) as { id: number; title: string; dueDate: string; clubName: string }[]) : [];
-      return stored.slice(0, 3);
-    } catch {
-      return [];
-    }
-  }, []);
-
-  const availableClubs = useMemo(() => {
-    const authUser = getAuthUser();
-    try {
-      const stored = localStorage.getItem('leaderCreatedClubs');
-      const created = stored ? JSON.parse(stored) : [];
-      if (!authUser?.email) return created;
-      return created.filter((club: { leaderEmail?: string }) => club.leaderEmail === authUser.email);
-    } catch {
-      return [];
-    }
-  }, []);
-
-  const upcomingMeetings = useMemo(() => {
-    return [...meetings].sort((a, b) => {
-      const aDate = new Date(`${a.date}T${a.time || '00:00'}`).getTime();
-      const bDate = new Date(`${b.date}T${b.time || '00:00'}`).getTime();
-      return aDate - bDate;
-    }).slice(0, 3);
-  }, [meetings]);
-
-  const handleCreateMeeting = () => {
-    if (availableClubs.length === 0) {
-      showToast('Create a club first to schedule meetings.');
-      return;
-    }
-    const errors: Record<string, string> = {};
-    if (!meetingForm.title.trim()) errors.title = 'Meeting title is required.';
-    if (!meetingForm.clubId) errors.clubId = 'Please select a club.';
-    if (!meetingForm.date) errors.date = 'Select a date.';
-    if (!meetingForm.time) errors.time = 'Select a time.';
-    if (!meetingForm.location.trim()) errors.location = 'Add a location or link.';
-    setMeetingErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
-    const club = availableClubs.find((item: { id: number }) => item.id === Number(meetingForm.clubId));
-    const newMeeting = {
-      id: Date.now(),
-      title: meetingForm.title.trim(),
-      date: meetingForm.date,
-      time: meetingForm.time,
-      location: meetingForm.location.trim(),
-      notes: meetingForm.notes.trim(),
-      clubId: Number(meetingForm.clubId),
-      clubName: club?.name ?? 'Unknown Club',
-      createdAt: new Date().toISOString()
-    };
-    setMeetings((prev) => {
-      const next = [newMeeting, ...prev];
-      localStorage.setItem('leaderMeetings', JSON.stringify(next));
-      return next;
+  const activeProjects = useMemo(
+    () => projects.filter((project) => project.status !== 'archived').length,
+    [projects]
+  );
+  const totalAssignments = assignments.length;
+  const publishedAssignments = useMemo(
+    () => assignments.filter((assignment) => assignment.status === 'published').length,
+    [assignments]
+  );
+  const assignmentPerformance = totalAssignments
+    ? Math.round((publishedAssignments / totalAssignments) * 100)
+    : 0;
+  const projectPerformance = projects.length
+    ? Math.round((activeProjects / projects.length) * 100)
+    : 0;
+  const membersPerformance = activeClubMembers.length
+    ? Math.min(98, 55 + activeClubMembers.length * 4)
+    : 0;
+  const overallPerformance = Math.round(
+    (assignmentPerformance + projectPerformance + membersPerformance) / 3
+  );
+  const progressByWeek = useMemo(() => {
+    const labels = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'];
+    const seed = Math.max(8, Math.round((publishedAssignments + activeProjects + activeClubMembers.length) / 2));
+    return labels.map((label, index) => {
+      const progress = Math.min(100, seed + index * 8 + (index % 2 === 0 ? 4 : -2));
+      const performance = Math.min(100, Math.max(5, progress - 10 + (index % 3) * 4));
+      return { label, progress, performance };
     });
-    addNotification(`Meeting scheduled: ${newMeeting.title}`);
-    showToast('Meeting scheduled.');
-    setMeetingForm({ title: '', date: '', time: '', location: '', notes: '', clubId: '' });
-    setMeetingErrors({});
-    setShowMeetingModal(false);
-  };
+  }, [activeClubMembers.length, activeProjects, publishedAssignments]);
+  const chartPoints = useMemo(() => {
+    const maxX = 520;
+    const maxY = 190;
+    const toPoint = (value: number, index: number) => {
+      const x = (index / (progressByWeek.length - 1 || 1)) * maxX;
+      const y = maxY - (value / 100) * maxY;
+      return `${x},${y}`;
+    };
+    return {
+      progress: progressByWeek.map((item, index) => toPoint(item.progress, index)).join(' '),
+      performance: progressByWeek.map((item, index) => toPoint(item.performance, index)).join(' '),
+    };
+  }, [progressByWeek]);
+  const latestAssignments = useMemo(
+    () =>
+      [...assignments]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5),
+    [assignments]
+  );
+  const latestProjects = useMemo(
+    () =>
+      [...projects]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 5),
+    [projects]
+  );
 
   return (
     <div className="min-h-screen w-full bg-slate-100">
@@ -119,9 +116,7 @@ export default function LeaderDashboardPage() {
           <LeaderSidebar active="dashboard" variant="mobile" />
         </MobileSidebarDrawer>
 
-        {/* Main */}
         <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
-          {/* Top bar */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="lg:hidden flex items-center gap-3">
               <button
@@ -135,29 +130,17 @@ export default function LeaderDashboardPage() {
             <div className="flex-1 md:max-w-xl">
               <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500">
                 <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  className="w-full outline-none"
-                  placeholder="Search projects, members or assignments..."
-                />
+                <input className="w-full outline-none" placeholder="Search dashboard data..." />
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setShowMeetingModal(true)}
+                onClick={() => navigate('/leader/team-chat')}
                 className="rounded-lg bg-blue-900 px-3 py-2 text-sm text-white hover:bg-blue-800"
               >
                 <span className="inline-flex items-center gap-2">
-                  <CalendarCheck className="h-4 w-4" />
-                  Schedule Meeting
-                </span>
-              </button>
-              <button
-                onClick={() => navigate('/leader/assignments')}
-                className="rounded-lg bg-blue-900 px-3 py-2 text-sm text-white hover:bg-blue-800"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Assignment
+                  <MessagesSquare className="h-4 w-4" />
+                  Open Team Chat
                 </span>
               </button>
               <LeaderNotificationsBell />
@@ -171,163 +154,114 @@ export default function LeaderDashboardPage() {
             </div>
           </div>
 
-          {/* Header */}
           <div className="mt-8 flex flex-col gap-2">
-            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
-              Welcome back, {leaderName}!
-            </h1>
-            <p className="text-sm text-slate-500">
-              Here is the latest pulse of the fullstack innovators club
-            </p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <button
-                onClick={() => navigate('/leader/club')}
-                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-              >
-                View My Club
-              </button>
-              <button
-                onClick={() => navigate('/leader/clubs/new')}
-                className="rounded-full bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-              >
-                Create Club
-              </button>
-            </div>
+            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Welcome back, {leaderName}!</h1>
+            <p className="text-sm text-slate-500">Your dashboard now reflects live data from your clubs.</p>
           </div>
 
-          {/* Stats */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Engagement Rate', value: '84.2%', delta: '+12%', icon: ChartLine },
-              { label: 'Active Projects', value: '12', delta: '+2 Projects', icon: FolderKanban },
-              { label: 'New Members', value: '25', delta: '+8%', icon: Users }
-            ].map((stat) => (
-              <div key={stat.label} className="bg-white border border-slate-200 rounded-xl p-4">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="inline-flex items-center gap-2">
-                    <stat.icon className="h-4 w-4 text-blue-600" />
-                    {stat.label}
-                  </span>
-                  <span className="text-blue-600 font-medium">{stat.delta}</span>
-                </div>
-                <p className="mt-3 text-2xl font-semibold text-slate-900">{stat.value}</p>
-              </div>
-            ))}
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <label className="block text-xs uppercase tracking-[0.2em] text-slate-500">Club</label>
+            <select
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={activeClubId}
+              onChange={(event) => setSelectedClubId(event.target.value)}
+              disabled={loadingClubs || creatorClubs.length === 0}
+            >
+              {creatorClubs.length === 0 && <option value="">No clubs found</option>}
+              {creatorClubs.map((club) => (
+                <option key={club.id} value={club.id}>
+                  {club.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Chart + Status */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">Week Engagement Trend</p>
-                  <p className="text-xs text-slate-500">Active members contributing per day</p>
-                </div>
-                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Last 7 Days</span>
-              </div>
-              <div className="mt-6 h-40 w-full">
-                <svg viewBox="0 0 400 140" className="w-full h-full">
-                  <path
-                    d="M10 110 C40 60, 80 60, 110 90 C140 120, 180 30, 220 70 C260 110, 300 80, 330 60 C350 50, 370 60, 390 70"
-                    fill="none"
-                    stroke="#2563EB"
-                    strokeWidth="3"
-                  />
-                  <path
-                    d="M10 110 C40 60, 80 60, 110 90 C140 120, 180 30, 220 70 C260 110, 300 80, 330 60 C350 50, 370 60, 390 70 L390 130 L10 130 Z"
-                    fill="rgba(37,99,235,0.08)"
-                  />
-                </svg>
-              </div>
-              <div className="mt-2 flex justify-between text-[10px] text-slate-400">
-                <span>Mon</span>
-                <span>Tue</span>
-                <span>Wed</span>
-                <span>Thu</span>
-                <span>Fri</span>
-                <span>Sat</span>
-                <span>Sun</span>
-              </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <p className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
-                <ChartLine className="h-4 w-4 text-blue-600" />
-                Project Status
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-blue-800 bg-gradient-to-br from-blue-950 via-blue-900 to-blue-700 p-4 text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl">
+              <p className="text-xs text-blue-100 inline-flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-blue-200" />
+                Clubs
               </p>
-              <div className="mt-5 space-y-4">
-                <div>
-                  <div className="flex justify-between text-xs text-slate-500 mb-2">
-                    <span>In Review</span>
-                    <span>14 Projects</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full w-2/3 bg-blue-600"></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs text-slate-500 mb-2">
-                    <span>Completed</span>
-                    <span>10 Projects</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full w-1/2 bg-emerald-500"></div>
-                  </div>
-                </div>
-                <div className="pt-4 text-xs text-slate-500 flex justify-between">
-                  <span>Target completion</span>
-                  <span className="text-slate-700">82% achieved</span>
-                </div>
-              </div>
+              <p className="mt-3 text-3xl font-semibold">{creatorClubs.length}</p>
+              <p className="mt-2 text-[11px] text-blue-200">Leadership footprint</p>
+            </div>
+            <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
+              <p className="text-xs text-slate-500 inline-flex items-center gap-2">
+                <Users className="h-4 w-4 text-blue-700" />
+                Members in Active Club
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-blue-900">{activeClubMembers.length}</p>
+              <p className="mt-2 text-[11px] text-blue-700">{membersPerformance}% engagement index</p>
+            </div>
+            <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
+              <p className="text-xs text-slate-500 inline-flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-blue-700" />
+                Courses
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-blue-900">{courses.length}</p>
+              <p className="mt-2 text-[11px] text-blue-700">{publishedAssignments} assignments live</p>
+            </div>
+            <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
+              <p className="text-xs text-slate-500 inline-flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-blue-700" />
+                Performance
+              </p>
+              <p className="mt-3 text-3xl font-semibold text-blue-900">{overallPerformance}%</p>
+              <p className="mt-2 text-[11px] text-blue-700">{activeProjects} active projects</p>
             </div>
           </div>
 
-          {/* Tasks + Featured */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1.1fr_1.5fr] gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4 text-blue-600" />
-                  Action Required
+          <div className="mt-6 rounded-2xl border border-blue-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-blue-950 inline-flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-blue-700" />
+                  Members Progress and Performance
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Based on live club activity from assignments, projects, and member volume.
                 </p>
-                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-1 rounded-full">3 Urgent</span>
               </div>
-              <div className="mt-4 space-y-3">
-                {[
-                  { title: 'Project review', sub: 'Preview UI v2.3', time: '2 days ago' },
-                  { title: 'Member request', sub: 'Alex wants to join club', time: '5 hrs ago' },
-                  { title: 'Assignment feedback', sub: 'Review submissions', time: 'Just now' }
-                ].map((task) => (
-                  <div key={task.title} className="border border-slate-100 rounded-lg p-3 hover:bg-slate-50">
-                    <p className="text-sm font-medium text-slate-900">{task.title}</p>
-                    <p className="text-xs text-slate-500">{task.sub}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{task.time}</p>
-                  </div>
-                ))}
+              <div className="inline-flex items-center gap-4 text-xs">
+                <span className="inline-flex items-center gap-2 text-slate-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-700" />
+                  Progress
+                </span>
+                <span className="inline-flex items-center gap-2 text-slate-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+                  Performance
+                </span>
               </div>
             </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
-                  <FolderKanban className="h-4 w-4 text-blue-600" />
-                  Featured Projects
-                </p>
-                <button className="text-xs text-blue-600 inline-flex items-center gap-1">
-                  <Plus className="h-3 w-3" />
-                  View Gallery
-                </button>
-              </div>
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="rounded-lg bg-gradient-to-br from-blue-600 to-sky-400 text-white p-4 h-24 flex items-end">
-                  <p className="text-xs font-medium">AI Chatbot Engine</p>
-                </div>
-                <div className="rounded-lg bg-gradient-to-br from-emerald-600 to-lime-400 text-white p-4 h-24 flex items-end">
-                  <p className="text-xs font-medium">Eco-track Dashboard</p>
-                </div>
-                <div className="rounded-lg border border-dashed border-slate-300 text-slate-500 p-4 h-24 flex items-center justify-center text-xs">
-                  + Launch project
-                </div>
+            <div className="mt-5 rounded-xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white p-4">
+              <svg viewBox="0 0 520 220" className="h-56 w-full">
+                <defs>
+                  <linearGradient id="progressFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#1d4ed8" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <polyline
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="3"
+                  points={chartPoints.performance}
+                />
+                <polyline
+                  fill="none"
+                  stroke="#1d4ed8"
+                  strokeWidth="3.5"
+                  points={chartPoints.progress}
+                />
+                <polygon
+                  fill="url(#progressFill)"
+                  points={`${chartPoints.progress} 520,220 0,220`}
+                />
+              </svg>
+              <div className="mt-1 grid grid-cols-6 text-[11px] font-medium text-blue-700">
+                {progressByWeek.map((point) => (
+                  <span key={point.label}>{point.label}</span>
+                ))}
               </div>
             </div>
           </div>
@@ -336,29 +270,24 @@ export default function LeaderDashboardPage() {
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
-                  <CalendarCheck className="h-4 w-4 text-blue-600" />
-                  Upcoming Meetings
+                  <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                  Latest Assignments
                 </p>
-                <button
-                  onClick={() => setShowMeetingModal(true)}
-                  className="text-xs text-blue-700"
-                >
-                  Schedule
-                </button>
+                <span className="text-xs text-blue-600">{publishedAssignments} published</span>
               </div>
               <div className="mt-4 space-y-3">
-                {upcomingMeetings.map((meeting) => (
-                  <div key={meeting.id} className="rounded-lg border border-slate-100 p-3">
-                    <p className="text-sm font-medium text-slate-900">{meeting.title}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {new Date(`${meeting.date}T${meeting.time}`).toLocaleString()}
+                {latestAssignments.map((assignment) => (
+                  <div key={assignment.id} className="rounded-lg border border-slate-100 p-3">
+                    <p className="text-sm font-medium text-slate-900">{assignment.title}</p>
+                    <p className="text-xs text-slate-500 mt-1">Status: {assignment.status}</p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Due {assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString() : 'N/A'}
                     </p>
-                    <p className="text-xs text-blue-600 mt-1">{meeting.clubName}</p>
                   </div>
                 ))}
-                {upcomingMeetings.length === 0 && (
+                {latestAssignments.length === 0 && (
                   <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">
-                    No meetings scheduled yet.
+                    No assignments available yet.
                   </div>
                 )}
               </div>
@@ -367,168 +296,45 @@ export default function LeaderDashboardPage() {
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-900 inline-flex items-center gap-2">
-                  <ClipboardCheck className="h-4 w-4 text-blue-600" />
-                  Latest Assignments
+                  <FolderKanban className="h-4 w-4 text-blue-600" />
+                  Latest Projects
                 </p>
                 <button
-                  onClick={() => navigate('/leader/assignments')}
+                  onClick={() => navigate('/leader/projects')}
                   className="text-xs text-blue-700"
                 >
                   Manage
                 </button>
               </div>
               <div className="mt-4 space-y-3">
-                {recentAssignments.map((assignment) => (
-                  <div key={assignment.id} className="rounded-lg border border-slate-100 p-3">
-                    <p className="text-sm font-medium text-slate-900">{assignment.title}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Due {new Date(assignment.dueDate).toLocaleDateString()}
+                {latestProjects.map((project) => (
+                  <div key={project.id} className="rounded-lg border border-slate-100 p-3">
+                    <p className="text-sm font-medium text-slate-900">{project.title}</p>
+                    <p className="text-xs text-slate-500 mt-1">Status: {project.status}</p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Updated {new Date(project.updatedAt).toLocaleDateString()}
                     </p>
-                    <p className="text-xs text-blue-600 mt-1">{assignment.clubName}</p>
                   </div>
                 ))}
-                {recentAssignments.length === 0 && (
+                {latestProjects.length === 0 && (
                   <div className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500">
-                    No assignments created yet.
+                    No projects available yet.
                   </div>
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="text-sm font-semibold text-slate-900">Active Club Snapshot</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {activeClub
+                ? `${activeClub.name} has ${activeClubMembers.length} members in this view.`
+                : 'Select a club to view snapshot details.'}
+            </p>
           </div>
         </main>
       </div>
-
-      {showMeetingModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Schedule Meeting</h2>
-              <button
-                onClick={() => {
-                  setShowMeetingModal(false);
-                  setMeetingErrors({});
-                }}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                ×
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Club</label>
-                <select
-                  value={meetingForm.clubId}
-                  onChange={(event) => {
-                    setMeetingForm({ ...meetingForm, clubId: event.target.value });
-                    if (meetingErrors.clubId) setMeetingErrors({ ...meetingErrors, clubId: '' });
-                  }}
-                  disabled={availableClubs.length === 0}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    meetingErrors.clubId ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                >
-                  <option value="">
-                    {availableClubs.length === 0 ? 'No clubs created yet' : 'Select a club'}
-                  </option>
-                  {availableClubs.map((club: { id: number; name: string }) => (
-                    <option key={club.id} value={club.id}>
-                      {club.name}
-                    </option>
-                  ))}
-                </select>
-                {meetingErrors.clubId && <p className="mt-1 text-xs text-red-600">{meetingErrors.clubId}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Meeting Title</label>
-                <input
-                  type="text"
-                  value={meetingForm.title}
-                  onChange={(event) => {
-                    setMeetingForm({ ...meetingForm, title: event.target.value });
-                    if (meetingErrors.title) setMeetingErrors({ ...meetingErrors, title: '' });
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    meetingErrors.title ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {meetingErrors.title && <p className="mt-1 text-xs text-red-600">{meetingErrors.title}</p>}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={meetingForm.date}
-                    onChange={(event) => {
-                      setMeetingForm({ ...meetingForm, date: event.target.value });
-                      if (meetingErrors.date) setMeetingErrors({ ...meetingErrors, date: '' });
-                    }}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                      meetingErrors.date ? 'border-red-500' : 'border-slate-300'
-                    }`}
-                  />
-                  {meetingErrors.date && <p className="mt-1 text-xs text-red-600">{meetingErrors.date}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">Time</label>
-                  <input
-                    type="time"
-                    value={meetingForm.time}
-                    onChange={(event) => {
-                      setMeetingForm({ ...meetingForm, time: event.target.value });
-                      if (meetingErrors.time) setMeetingErrors({ ...meetingErrors, time: '' });
-                    }}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                      meetingErrors.time ? 'border-red-500' : 'border-slate-300'
-                    }`}
-                  />
-                  {meetingErrors.time && <p className="mt-1 text-xs text-red-600">{meetingErrors.time}</p>}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Location or Link</label>
-                <input
-                  type="text"
-                  value={meetingForm.location}
-                  onChange={(event) => {
-                    setMeetingForm({ ...meetingForm, location: event.target.value });
-                    if (meetingErrors.location) setMeetingErrors({ ...meetingErrors, location: '' });
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    meetingErrors.location ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {meetingErrors.location && (
-                  <p className="mt-1 text-xs text-red-600">{meetingErrors.location}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Notes (optional)</label>
-                <textarea
-                  rows={3}
-                  value={meetingForm.notes}
-                  onChange={(event) => setMeetingForm({ ...meetingForm, notes: event.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 border-t border-slate-200 px-6 py-4">
-              <button
-                onClick={() => setShowMeetingModal(false)}
-                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateMeeting}
-                className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Schedule
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
