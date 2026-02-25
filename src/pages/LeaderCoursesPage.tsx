@@ -1,154 +1,217 @@
 import { useMemo, useState } from 'react';
-import { BookOpen, Layers, Menu, Plus, Search, Trash2, Pencil } from 'lucide-react';
+import {
+  BookOpen,
+  BriefcaseBusiness,
+  ChevronDown,
+  ClipboardList,
+  FilePlus2,
+  FolderPlus,
+  Layers,
+  Menu,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import LeaderSidebar from '../components/leader/LeaderSidebar';
 import LeaderNotificationsBell from '../components/leader/LeaderNotificationsBell';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 import { getAuthUser, getLeaderDisplayName } from '@/utils/authUser';
-import { clubs as baseClubs } from '@/data/clubs';
-import { studentCourses, type StudentCourse } from '@/data/studentCourses';
-import { addNotification } from '@/utils/notifications';
 import { showToast } from '@/utils/toast';
+import { useGetCreatorClubsQuery } from '@/features/ClubsApi';
+import {
+  useCreateCourseMutation,
+  useCreateLessonMutation,
+  useCreateModuleMutation,
+  useDeleteCourseMutation,
+  useDeleteLessonMutation,
+  useDeleteModuleMutation,
+  useGetCourseByIdQuery,
+  useGetCoursesByClubIdsQuery,
+  usePublishCourseMutation,
+  useUpdateCourseMutation,
+  useUpdateLessonMutation,
+  useUpdateModuleMutation,
+} from '@/features/CoursesApi';
+import {
+  useCreateAssignmentMutation,
+  useDeleteAssignmentMutation,
+  useGetAssignmentSubmissionsQuery,
+  useGetAssignmentsByCourseQuery,
+  usePublishAssignmentMutation,
+  useUpdateAssignmentMutation,
+} from '@/features/AssignmentsApi';
+import {
+  useCreateProjectTeamMutation,
+  useCreateProjectMutation,
+  useDeleteProjectMutation,
+  useGetMyProjectTeamsQuery,
+  useGetProjectTeamsQuery,
+  useGetProjectsByCourseQuery,
+  usePublishProjectMutation,
+  useSubmitProjectTeamMutation,
+  useUpdateProjectMutation,
+} from '@/features/ProjectsApi';
+import type { CourseLevel, CourseStatus, LessonType } from '@/types/course';
 
-type LeaderCourse = StudentCourse & {
-  clubId: number;
-  clubName: string;
-  createdAt: string;
+type CourseForm = {
+  clubId: string;
+  title: string;
+  description: string;
+  level: CourseLevel;
+  status: CourseStatus;
+  duration: string;
+  thumbnail: string;
 };
 
-const defaultImage = studentCourses[0]?.image ?? '/assets/c1image.jpg';
+type AssignmentForm = {
+  title: string;
+  description: string;
+  instructions: string;
+  type: 'individual' | 'group';
+};
+
+const initialCourseForm: CourseForm = {
+  clubId: '',
+  title: '',
+  description: '',
+  level: 'beginner',
+  status: 'draft',
+  duration: '',
+  thumbnail: '',
+};
+
+const initialAssignmentForm: AssignmentForm = {
+  title: '',
+  description: '',
+  instructions: '',
+  type: 'individual',
+};
 
 export default function LeaderCoursesPage() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const leaderName = getLeaderDisplayName();
+  const creatorId = getAuthUser()?.id ?? '';
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<LeaderCourse | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [formState, setFormState] = useState({
-    title: '',
-    level: '',
-    instructor: '',
-    lessons: '',
-    clubId: ''
-  });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [curriculumCourseId, setCurriculumCourseId] = useState<string | null>(null);
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'curriculum' | 'assignments' | 'projects'>('curriculum');
+  const [addModuleOpen, setAddModuleOpen] = useState(false);
+  const [addLessonOpen, setAddLessonOpen] = useState(false);
+  const [addAssignmentOpen, setAddAssignmentOpen] = useState(false);
+  const [courseForm, setCourseForm] = useState<CourseForm>(initialCourseForm);
+  const [assignmentForm, setAssignmentForm] = useState<AssignmentForm>(initialAssignmentForm);
+  const [moduleForm, setModuleForm] = useState({ title: '', description: '', duration: '' });
+  const [lessonForm, setLessonForm] = useState({ moduleId: '', title: '', description: '', type: 'text' as LessonType, duration: '' });
+  const [lessonContentType, setLessonContentType] = useState<'text' | 'video' | 'file' | 'external_link'>('text');
+  const [lessonContentValue, setLessonContentValue] = useState('');
+  const [lessonContentLinkTitle, setLessonContentLinkTitle] = useState('');
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
-  const availableClubs = useMemo(() => {
-    const authUser = getAuthUser();
-    try {
-      const stored = localStorage.getItem('leaderCreatedClubs');
-      const created = stored ? JSON.parse(stored) : [];
-      if (!authUser?.email) return created;
-      return created.filter((club: { leaderEmail?: string }) => club.leaderEmail === authUser.email);
-    } catch {
-      return [];
-    }
-  }, []);
+  const { data: clubs = [] } = useGetCreatorClubsQuery(creatorId, { skip: !creatorId });
+  const clubIds = useMemo(() => clubs.map((c) => c.id), [clubs]);
+  const { data: courses = [], isLoading, refetch } = useGetCoursesByClubIdsQuery(clubIds, { skip: clubIds.length === 0 });
+  const { data: curriculum, refetch: refetchCurriculum } = useGetCourseByIdQuery(curriculumCourseId ?? '', { skip: !curriculumCourseId });
+  const { data: assignments = [], refetch: refetchAssignments } = useGetAssignmentsByCourseQuery(curriculumCourseId ?? '', { skip: !curriculumCourseId });
+  const { data: projects = [], refetch: refetchProjects } = useGetProjectsByCourseQuery(curriculumCourseId ?? '', { skip: !curriculumCourseId });
+  const { data: assignmentSubmissions = [], refetch: refetchAssignmentSubmissions } = useGetAssignmentSubmissionsQuery(selectedAssignmentId ?? '', { skip: !selectedAssignmentId });
+  const { data: projectTeams = [], refetch: refetchProjectTeams } = useGetProjectTeamsQuery(selectedProjectId ?? '', { skip: !selectedProjectId });
+  const { refetch: refetchMyTeams } = useGetMyProjectTeamsQuery();
+  const assignmentsList = Array.isArray(assignments) ? assignments : [];
+  const projectsList = Array.isArray(projects) ? projects : [];
 
-  const [courses, setCourses] = useState<LeaderCourse[]>(() => {
-    try {
-      const raw = localStorage.getItem('leaderCourses');
-      return raw ? (JSON.parse(raw) as LeaderCourse[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [createCourse] = useCreateCourseMutation();
+  const [updateCourse] = useUpdateCourseMutation();
+  const [deleteCourse] = useDeleteCourseMutation();
+  const [publishCourse] = usePublishCourseMutation();
+  const [createModule] = useCreateModuleMutation();
+  const [updateModule] = useUpdateModuleMutation();
+  const [deleteModule] = useDeleteModuleMutation();
+  const [createLesson] = useCreateLessonMutation();
+  const [updateLesson] = useUpdateLessonMutation();
+  const [deleteLesson] = useDeleteLessonMutation();
+  const [createAssignment] = useCreateAssignmentMutation();
+  const [updateAssignment] = useUpdateAssignmentMutation();
+  const [publishAssignment] = usePublishAssignmentMutation();
+  const [deleteAssignment] = useDeleteAssignmentMutation();
+  const [createProject] = useCreateProjectMutation();
+  const [updateProject] = useUpdateProjectMutation();
+  const [publishProject] = usePublishProjectMutation();
+  const [deleteProject] = useDeleteProjectMutation();
+  const [createProjectTeam] = useCreateProjectTeamMutation();
+  const [submitProjectTeam] = useSubmitProjectTeamMutation();
 
   const filteredCourses = useMemo(() => {
-    const search = searchTerm.trim().toLowerCase();
-    if (!search) return courses;
-    return courses.filter((course) =>
-      [course.title, course.level, course.instructor, course.clubName]
-        .filter(Boolean)
-        .some((item) => item.toLowerCase().includes(search))
-    );
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return courses;
+    return courses.filter((c) => [c.title, c.description, c.level].some((v) => (v || '').toLowerCase().includes(q)));
   }, [courses, searchTerm]);
 
-  const resetForm = () => {
-    setFormState({ title: '', level: '', instructor: '', lessons: '', clubId: '' });
-    setFormErrors({});
+  const currentEditingCourse = courses.find((c) => c.id === editingCourseId) ?? null;
+
+  const refreshAll = async () => {
+    await refetch();
+    if (curriculumCourseId) {
+      await refetchCurriculum();
+      await refetchAssignments();
+      await refetchProjects();
+      if (selectedAssignmentId) await refetchAssignmentSubmissions();
+      if (selectedProjectId) await refetchProjectTeams();
+      await refetchMyTeams();
+    }
   };
 
-  const validateForm = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!formState.title.trim()) nextErrors.title = 'Course title is required.';
-    if (!formState.level.trim()) nextErrors.level = 'Course level is required.';
-    if (!formState.instructor.trim()) nextErrors.instructor = 'Instructor name is required.';
-    if (!formState.clubId) nextErrors.clubId = 'Please select a club.';
-    if (!formState.lessons.trim()) nextErrors.lessons = 'Add at least one lesson.';
-    setFormErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const buildModules = (lessonsInput: string) => {
-    const lessons = lessonsInput
-      .split('\n')
-      .map((lesson) => lesson.trim())
-      .filter(Boolean);
-    return [
-      {
-        id: `module-${Date.now()}`,
-        title: 'Core Lessons',
-        lessons
-      }
-    ];
-  };
-
-  const handleCreateCourse = () => {
-    if (availableClubs.length === 0) {
-      showToast('Create a club first to add courses.');
+  const createAssignmentFromModal = async () => {
+    if (!curriculumCourseId) return;
+    const title = assignmentForm.title.trim();
+    const description = assignmentForm.description.trim();
+    const instructions = assignmentForm.instructions.trim() || description || title;
+    if (title.length < 3) {
+      showToast('Assignment title must be at least 3 characters.');
       return;
     }
-    if (!validateForm()) return;
-    const club = availableClubs.find((item: { id: number }) => item.id === Number(formState.clubId));
-    const newCourse: LeaderCourse = {
-      id: `leader-${Date.now()}`,
-      title: formState.title.trim(),
-      level: formState.level.trim(),
-      instructor: formState.instructor.trim(),
-      image: defaultImage,
-      modules: buildModules(formState.lessons),
-      clubId: Number(formState.clubId),
-      clubName: club?.name ?? 'Unknown Club',
-      createdAt: new Date().toISOString()
-    };
-    setCourses((prev) => {
-      const next = [newCourse, ...prev];
-      localStorage.setItem('leaderCourses', JSON.stringify(next));
-      return next;
-    });
-    addNotification(`Course created: ${newCourse.title}`);
-    showToast('Course created.');
-    resetForm();
-    setShowCreateModal(false);
+    try {
+      await createAssignment({
+        courseId: curriculumCourseId,
+        title,
+        description,
+        instructions,
+        type: assignmentForm.type,
+      }).unwrap();
+      showToast('Assignment created.');
+      setAssignmentForm(initialAssignmentForm);
+      setAddAssignmentOpen(false);
+      await refetchAssignments();
+    } catch (error) {
+      const apiError = error as { data?: { message?: string | string[] } };
+      const rawMessage = apiError?.data?.message;
+      const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : rawMessage || 'Failed to create assignment';
+      showToast(message);
+    }
   };
 
-  const handleDeleteCourse = (courseId: string) => {
-    if (!confirm('Delete this course? This cannot be undone.')) return;
-    setCourses((prev) => {
-      const next = prev.filter((course) => course.id !== courseId);
-      localStorage.setItem('leaderCourses', JSON.stringify(next));
-      return next;
-    });
-    addNotification('Course deleted.');
-    showToast('Course deleted.');
-  };
-
-  const handleUpdateCourse = () => {
-    if (!editingCourse) return;
-    const club = availableClubs.find((item: { id: number }) => item.id === editingCourse.clubId);
-    const updated = {
-      ...editingCourse,
-      clubName: club?.name ?? editingCourse.clubName
-    };
-    setCourses((prev) => {
-      const next = prev.map((course) => (course.id === updated.id ? updated : course));
-      localStorage.setItem('leaderCourses', JSON.stringify(next));
-      return next;
-    });
-    addNotification(`Course updated: ${updated.title}`);
-    showToast('Course updated.');
-    setEditingCourse(null);
+  const addProjectByPrompt = async () => {
+    if (!curriculumCourseId) return;
+    const title = prompt('New project title:')?.trim();
+    if (!title) return;
+    const description = prompt('project description:')?.trim() || '';
+    const requirements = prompt('Project requirements:')?.trim() || description || title;
+    const type = (prompt('Type: group or individual', 'individual') || 'individual') as 'group' | 'individual';
+    await createProject({
+      courseId: curriculumCourseId,
+      title,
+      description,
+      requirements,
+      type,
+      minTeamSize: type === 'group' ? 1 : 1,
+      maxTeamSize: type === 'group' ? 5 : 1,
+    }).unwrap();
+    showToast('Project created.');
+    await refetchProjects();
   };
 
   return (
@@ -158,312 +221,46 @@ export default function LeaderCoursesPage() {
         <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Leader Menu">
           <LeaderSidebar active="courses" variant="mobile" />
         </MobileSidebarDrawer>
-
-        <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <main className="flex-1 px-4 py-5 lg:px-6 lg:ml-64">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="lg:hidden flex items-center gap-3">
-              <button
-                onClick={() => setDrawerOpen(true)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"
-              >
-                <Menu className="h-5 w-5" />
-              </button>
+              <button onClick={() => setDrawerOpen(true)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600"><Menu className="h-5 w-5" /></button>
               <CodeCircleLogo className="text-blue-700" />
             </div>
-            <div className="flex-1 md:max-w-xl">
-              <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-500">
-                <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  className="w-full outline-none"
-                  placeholder="Search courses, levels, or clubs..."
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="rounded-lg bg-blue-900 px-3 py-2 text-sm text-white hover:bg-blue-800"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  New Course
-                </span>
-              </button>
-              <LeaderNotificationsBell />
-              <div className="flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-2">
-                <div className="h-7 w-7 rounded-full bg-slate-200"></div>
-                <div className="text-xs">
-                  <p className="text-slate-700 font-medium">{leaderName}</p>
-                  <p className="text-slate-400">Leader</p>
-                </div>
-              </div>
-            </div>
+            <div className="flex-1 md:max-w-xl"><div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500"><Search className="h-4 w-4 text-slate-400" /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full outline-none" placeholder="Search courses..." /></div></div>
+            <div className="flex items-center gap-3"><button onClick={() => setCreateOpen(true)} className="rounded-lg bg-blue-900 px-3 py-2 text-sm text-white hover:bg-blue-800"><span className="inline-flex items-center gap-2"><Plus className="h-4 w-4" />New Course</span></button><LeaderNotificationsBell /><div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2"><div className="h-7 w-7 rounded-full bg-slate-200" /><div className="text-xs"><p className="font-medium text-slate-700">{leaderName}</p><p className="text-slate-400">Leader</p></div></div></div>
           </div>
-
-          <div className="mt-8 flex flex-col gap-2">
-            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Courses</h1>
-            <p className="text-sm text-slate-500">
-              Create and manage courses that your club members can access.
-            </p>
-          </div>
-
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredCourses.map((course) => (
-              <div key={course.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-2 text-xs text-slate-500">
-                    <BookOpen className="h-4 w-4 text-blue-600" />
-                    {course.level}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {new Date(course.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <h3 className="mt-3 text-sm font-semibold text-slate-900">{course.title}</h3>
-                <p className="mt-1 text-xs text-slate-500">{course.instructor}</p>
-                <p className="mt-2 text-xs text-blue-700 font-semibold">{course.clubName}</p>
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                  <Layers className="h-4 w-4 text-blue-600" />
-                  {course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0)} lessons
-                </div>
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    onClick={() => setEditingCourse(course)}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600"
-                  >
-                    <Pencil className="h-3 w-3" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCourse(course.id)}
-                    className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Delete
-                  </button>
-                </div>
+          <div className="mt-4 grid grid-cols-1 xl:grid-cols-[1.24fr_1fr] gap-2">
+            <section>{isLoading ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">Loading courses...</div> : <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{filteredCourses.map((c) => <div key={c.id} className={`rounded-2xl border bg-white p-4 ${curriculumCourseId === c.id ? 'border-blue-300 ring-1 ring-blue-200' : 'border-slate-200'}`}><div className="mt-1 flex items-center justify-between"><span className="inline-flex items-center gap-2 text-xs text-slate-500"><BookOpen className="h-4 w-4 text-blue-600" />{c.level}</span><span className="text-[10px] uppercase tracking-[0.2em] text-slate-400">{c.status}</span></div><h3 className="mt-2 text-sm font-semibold text-slate-900">{c.title}</h3><p className="mt-1 text-xs text-slate-500 line-clamp-2">{c.description}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setCurriculumCourseId(c.id)} className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700"><Layers className="h-3 w-3" />Open</button><button onClick={() => setEditingCourseId(c.id)} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600"><Pencil className="h-3 w-3" />Edit</button>{c.status === 'draft' && <button onClick={async () => { try { await publishCourse(c.id).unwrap(); showToast('Course published.'); await refreshAll(); } catch (error) { const apiError = error as { data?: { message?: string | string[] } }; const rawMessage = apiError?.data?.message; const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : rawMessage || 'Failed to publish course'; showToast(message); } }} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">Publish</button>}<button onClick={async () => { if (!confirm('Delete this course?')) return; await deleteCourse(c.id).unwrap(); await refreshAll(); }} className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700"><Trash2 className="h-3 w-3" />Delete</button></div></div>)}</div>}</section>
+            <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 xl:sticky xl:top-5">
+              <div className="mt-1 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-900">{curriculum?.title ?? 'Curriculum'}</h2>
+                <div className="flex items-center gap-1">{activeTab === 'curriculum' && <><button onClick={() => setAddModuleOpen(true)} disabled={!curriculumCourseId} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-700 disabled:opacity-50"><FolderPlus className="h-4 w-4" /></button><button onClick={() => setAddLessonOpen(true)} disabled={!curriculumCourseId} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-700 disabled:opacity-50"><FilePlus2 className="h-4 w-4" /></button></>}{activeTab === 'assignments' && <button onClick={() => setAddAssignmentOpen(true)} disabled={!curriculumCourseId} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-700 disabled:opacity-50"><ClipboardList className="h-4 w-4" /></button>}{activeTab === 'projects' && <button onClick={() => addProjectByPrompt()} disabled={!curriculumCourseId} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-700 disabled:opacity-50"><BriefcaseBusiness className="h-4 w-4" /></button>}</div>
               </div>
-            ))}
-            {filteredCourses.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
-                No courses yet. Create one to get started.
+              <div className="mt-3 flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+                <button onClick={() => setActiveTab('overview')} className={`rounded-md px-2.5 py-1 text-xs ${activeTab === 'overview' ? 'bg-white' : ''}`}>Overview</button>
+                <button onClick={() => setActiveTab('curriculum')} className={`rounded-md px-2.5 py-1 text-xs ${activeTab === 'curriculum' ? 'bg-white' : ''}`}>Curriculum</button>
+                <button onClick={() => setActiveTab('assignments')} className={`rounded-md px-2.5 py-1 text-xs ${activeTab === 'assignments' ? 'bg-white' : ''}`}>Assignments</button>
+                <button onClick={() => setActiveTab('projects')} className={`rounded-md px-2.5 py-1 text-xs ${activeTab === 'projects' ? 'bg-white' : ''}`}>Projects</button>
               </div>
-            )}
+              {!curriculumCourseId && <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">Select a course.</div>}
+              {curriculumCourseId && activeTab === 'overview' && <div className="mt-3 grid grid-cols-3 gap-2 text-center">{[{k:'Modules',v:curriculum?.modules?.length ?? 0},{k:'Lessons',v:(curriculum?.modules ?? []).reduce((a,m)=>a+(m.lessons?.length ?? 0),0)},{k:'Assigns',v:assignmentsList.length}].map((i)=><div key={i.k} className="rounded-lg border border-slate-200 bg-slate-50 p-2"><p className="text-[10px] uppercase text-slate-500">{i.k}</p><p className="text-sm font-semibold text-slate-900">{i.v}</p></div>)}</div>}
+              {curriculumCourseId && activeTab === 'curriculum' && <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto pr-1">{[...(curriculum?.modules ?? [])].sort((a,b)=>a.orderIndex-b.orderIndex).map((m)=>{const open=expandedModuleId===m.id;return <div key={m.id} className="overflow-hidden rounded-xl border border-slate-200"><button onClick={()=>setExpandedModuleId(open?null:m.id)} className="flex w-full items-center justify-between bg-slate-50 px-3 py-2 text-left"><span className="text-sm font-semibold text-slate-800">Module {m.orderIndex}: {m.title}</span><ChevronDown className={`h-4 w-4 text-slate-500 ${open?'rotate-180':''}`} /></button>{open && <div className="space-y-2 bg-white p-3"><div className="flex justify-end gap-2"><button onClick={async()=>{const t=prompt('Module title',m.title);if(!t)return;const d=prompt('Module description',m.description ?? '') ?? '';await updateModule({moduleId:m.id,body:{title:t,description:d}}).unwrap();await refetchCurriculum();}} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"><span className="inline-flex items-center gap-1"><Pencil className="h-3 w-3" />Edit</span></button><button onClick={async()=>{if(!confirm('Delete module?')) return;await deleteModule(m.id).unwrap();await refetchCurriculum();}} className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700">Delete</button></div>{[...(m.lessons ?? [])].sort((a,b)=>a.orderIndex-b.orderIndex).map((l)=><div key={l.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><div><p className="text-sm text-slate-700">{l.orderIndex}. {l.title}</p><p className="text-xs uppercase text-slate-500">{l.type}</p></div><div className="flex items-center gap-2"><button onClick={async()=>{const t=prompt('Lesson title',l.title);if(!t)return;const d=prompt('Lesson description',l.description ?? '') ?? '';await updateLesson({lessonId:l.id,body:{title:t,description:d,type:l.type as LessonType}}).unwrap();await refetchCurriculum();}} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"><span className="inline-flex items-center gap-1"><Pencil className="h-3 w-3" />Edit</span></button><button onClick={async()=>{if(!confirm('Delete lesson?'))return;await deleteLesson(l.id).unwrap();await refetchCurriculum();}} className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700">Delete</button></div></div>)}</div>}</div>;})}</div>}
+              {curriculumCourseId && activeTab === 'assignments' && <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto pr-1">{assignmentsList.map((a)=><div key={a.id} className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-slate-900">{a.title}</p><div className="flex items-center gap-2"><button onClick={async()=>{const t=prompt('Title',a.title);if(!t)return;const d=prompt('Description',a.description) ?? '';const i=prompt('Instructions',a.instructions) ?? '';await updateAssignment({assignmentId:a.id,courseId:curriculumCourseId,body:{courseId:curriculumCourseId,title:t,description:d,instructions:i,type:a.type}}).unwrap();await refetchAssignments();}} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"><span className="inline-flex items-center gap-1"><Pencil className="h-3 w-3" />Edit</span></button>{a.status==='draft' && <button onClick={async()=>{await publishAssignment({assignmentId:a.id,courseId:curriculumCourseId}).unwrap();await refetchAssignments();}} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">Publish</button>}<button onClick={async()=>{setSelectedAssignmentId(selectedAssignmentId===a.id?null:a.id);setSelectedProjectId(null);}} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">Submissions</button><button onClick={async()=>{if(!confirm('Delete assignment?'))return;await deleteAssignment({assignmentId:a.id,courseId:curriculumCourseId}).unwrap();await refetchAssignments();}} className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700">Delete</button></div></div><p className="mt-1 text-xs text-slate-500">{a.description}</p><div className="mt-2 flex items-center justify-between text-[11px] uppercase text-slate-400"><span>{a.type}</span><span>{a.status}</span></div>{selectedAssignmentId===a.id && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">{assignmentSubmissions.length===0 ? <p className="text-xs text-slate-500">No member submissions yet.</p> : assignmentSubmissions.map((sub)=><div key={sub.id} className="rounded-md border border-slate-200 bg-white p-2"><p className="text-xs font-semibold text-slate-700">Member: {sub.userId}</p><p className="text-xs text-slate-500 mt-1 line-clamp-2">{sub.content || 'No content'}</p><p className="text-[11px] text-slate-400 mt-1">Status: {sub.status}</p></div>)}</div>}</div>)}{assignmentsList.length===0 && <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">No assignments.</div>}</div>}
+              {curriculumCourseId && activeTab === 'projects' && <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto pr-1">{projectsList.map((p)=><div key={p.id} className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><p className="text-sm font-semibold text-slate-900">{p.title}</p><div className="flex items-center gap-2"><button onClick={async()=>{const t=prompt('Title',p.title);if(!t)return;const d=prompt('Description',p.description) ?? '';const r=prompt('Requirements',p.requirements) ?? '';await updateProject({projectId:p.id,courseId:curriculumCourseId,body:{courseId:curriculumCourseId,title:t,description:d,requirements:r,type:p.type}}).unwrap();await refetchProjects();}} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"><span className="inline-flex items-center gap-1"><Pencil className="h-3 w-3" />Edit</span></button>{p.status==='draft' && <button onClick={async()=>{await publishProject({projectId:p.id,courseId:curriculumCourseId}).unwrap();await refetchProjects();}} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700">Publish</button>}<button onClick={async()=>{setSelectedProjectId(selectedProjectId===p.id?null:p.id);setSelectedAssignmentId(null);}} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700">Submissions</button><button onClick={async()=>{if(!confirm('Delete project?'))return;await deleteProject({projectId:p.id,courseId:curriculumCourseId}).unwrap();await refetchProjects();}} className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-700">Delete</button></div></div><p className="mt-1 text-xs text-slate-500">{p.description}</p><div className="mt-2 flex items-center justify-between text-[11px] uppercase text-slate-400"><span>{p.type}</span><span>{p.status}</span></div>{selectedProjectId===p.id && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">{projectTeams.length===0 ? <p className="text-xs text-slate-500">No project submissions yet.</p> : projectTeams.map((team)=><div key={team.id} className="rounded-md border border-slate-200 bg-white p-2"><p className="text-xs font-semibold text-slate-700">{team.name}</p><p className="text-[11px] text-slate-400 mt-1">Status: {team.status}</p><p className="text-xs text-slate-500 mt-1 line-clamp-2">{team.submissionContent || 'No submission content'}</p></div>)}</div>}</div>)}{projectsList.length===0 && <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">No projects.</div>}</div>}
+            </aside>
           </div>
         </main>
       </div>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Create Course</h2>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  resetForm();
-                }}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                ×
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Club</label>
-                <select
-                  value={formState.clubId}
-                  onChange={(event) => {
-                    setFormState({ ...formState, clubId: event.target.value });
-                    if (formErrors.clubId) setFormErrors({ ...formErrors, clubId: '' });
-                  }}
-                  disabled={availableClubs.length === 0}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    formErrors.clubId ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                >
-                  <option value="">
-                    {availableClubs.length === 0 ? 'No clubs created yet' : 'Select a club'}
-                  </option>
-                  {availableClubs.map((club: { id: number; name: string }) => (
-                    <option key={club.id} value={club.id}>
-                      {club.name}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.clubId && <p className="mt-1 text-xs text-red-600">{formErrors.clubId}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Course Title</label>
-                <input
-                  type="text"
-                  value={formState.title}
-                  onChange={(event) => {
-                    setFormState({ ...formState, title: event.target.value });
-                    if (formErrors.title) setFormErrors({ ...formErrors, title: '' });
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    formErrors.title ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {formErrors.title && <p className="mt-1 text-xs text-red-600">{formErrors.title}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Course Level</label>
-                <input
-                  type="text"
-                  value={formState.level}
-                  onChange={(event) => {
-                    setFormState({ ...formState, level: event.target.value });
-                    if (formErrors.level) setFormErrors({ ...formErrors, level: '' });
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    formErrors.level ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {formErrors.level && <p className="mt-1 text-xs text-red-600">{formErrors.level}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Instructor</label>
-                <input
-                  type="text"
-                  value={formState.instructor}
-                  onChange={(event) => {
-                    setFormState({ ...formState, instructor: event.target.value });
-                    if (formErrors.instructor) setFormErrors({ ...formErrors, instructor: '' });
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    formErrors.instructor ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {formErrors.instructor && (
-                  <p className="mt-1 text-xs text-red-600">{formErrors.instructor}</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Lessons (one per line)</label>
-                <textarea
-                  rows={4}
-                  value={formState.lessons}
-                  onChange={(event) => {
-                    setFormState({ ...formState, lessons: event.target.value });
-                    if (formErrors.lessons) setFormErrors({ ...formErrors, lessons: '' });
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900 ${
-                    formErrors.lessons ? 'border-red-500' : 'border-slate-300'
-                  }`}
-                />
-                {formErrors.lessons && <p className="mt-1 text-xs text-red-600">{formErrors.lessons}</p>}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 border-t border-slate-200 px-6 py-4">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  resetForm();
-                }}
-                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateCourse}
-                className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Create Course
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {createOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-3"><h2 className="text-lg font-semibold text-slate-900">Create Course</h2><select value={courseForm.clubId} onChange={(e)=>setCourseForm({...courseForm,clubId:e.target.value})} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Select club</option>{clubs.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select><input value={courseForm.title} onChange={(e)=>setCourseForm({...courseForm,title:e.target.value})} placeholder="Title" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><textarea value={courseForm.description} onChange={(e)=>setCourseForm({...courseForm,description:e.target.value})} placeholder="Description" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><div className="grid grid-cols-2 gap-2"><select value={courseForm.level} onChange={(e)=>setCourseForm({...courseForm,level:e.target.value as CourseLevel})} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select><select value={courseForm.status} onChange={(e)=>setCourseForm({...courseForm,status:e.target.value as CourseStatus})} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></div><input value={courseForm.duration} onChange={(e)=>setCourseForm({...courseForm,duration:e.target.value})} placeholder="Duration (hours)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><input value={courseForm.thumbnail} onChange={(e)=>setCourseForm({...courseForm,thumbnail:e.target.value})} placeholder="Thumbnail URL (https://...)" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><div className="flex gap-2"><button onClick={()=>setCreateOpen(false)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button><button onClick={async()=>{try{if(!courseForm.clubId||!courseForm.title.trim()||!courseForm.description.trim()){showToast('Select a club and fill title/description.');return;}const parsedDuration=courseForm.duration.trim()===''?undefined:Number(courseForm.duration);if(parsedDuration!==undefined&&(!Number.isFinite(parsedDuration)||parsedDuration<0)){showToast('Duration must be a valid non-negative number.');return;}await createCourse({clubId:courseForm.clubId,title:courseForm.title.trim(),description:courseForm.description.trim(),level:courseForm.level,status:courseForm.status,duration:parsedDuration,thumbnail:courseForm.thumbnail||undefined}).unwrap();setCourseForm(initialCourseForm);setCreateOpen(false);await refetch();showToast('Course created successfully.');}catch(error){const apiError=error as {data?:{message?:string|string[]}};const rawMessage=apiError?.data?.message;const message=Array.isArray(rawMessage)?rawMessage.join(', '):rawMessage||'Failed to create course';showToast(message);}}} className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm text-white">Create</button></div></div></div>}
 
-      {editingCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Edit Course</h2>
-              <button onClick={() => setEditingCourse(null)} className="text-slate-500 hover:text-slate-700">
-                ×
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Club</label>
-                <select
-                  value={editingCourse.clubId}
-                  onChange={(event) =>
-                    setEditingCourse({ ...editingCourse, clubId: Number(event.target.value) })
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                >
-                  {availableClubs.map((club: { id: number; name: string }) => (
-                    <option key={club.id} value={club.id}>
-                      {club.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Course Title</label>
-                <input
-                  type="text"
-                  value={editingCourse.title}
-                  onChange={(event) => setEditingCourse({ ...editingCourse, title: event.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Course Level</label>
-                <input
-                  type="text"
-                  value={editingCourse.level}
-                  onChange={(event) => setEditingCourse({ ...editingCourse, level: event.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Instructor</label>
-                <input
-                  type="text"
-                  value={editingCourse.instructor}
-                  onChange={(event) => setEditingCourse({ ...editingCourse, instructor: event.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Lessons (one per line)</label>
-                <textarea
-                  rows={4}
-                  value={editingCourse.modules[0]?.lessons.join('\n') ?? ''}
-                  onChange={(event) =>
-                    setEditingCourse({
-                      ...editingCourse,
-                      modules: buildModules(event.target.value)
-                    })
-                  }
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-900"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 border-t border-slate-200 px-6 py-4">
-              <button
-                onClick={() => setEditingCourse(null)}
-                className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateCourse}
-                className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {currentEditingCourse && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-3"><h2 className="text-lg font-semibold text-slate-900">Edit Course</h2><input value={currentEditingCourse.title} onChange={(e)=>updateCourse({id:currentEditingCourse.id,body:{title:e.target.value}})} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><textarea value={currentEditingCourse.description} onChange={(e)=>updateCourse({id:currentEditingCourse.id,body:{description:e.target.value}})} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><div className="flex gap-2"><button onClick={()=>setEditingCourseId(null)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm">Close</button><button onClick={async()=>{await refetch();setEditingCourseId(null);showToast('Course updated.');}} className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm text-white">Done</button></div></div></div>}
+
+      {addAssignmentOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl space-y-3"><h2 className="text-lg font-semibold text-slate-900">Create Assignment</h2><input value={assignmentForm.title} onChange={(e)=>setAssignmentForm({...assignmentForm,title:e.target.value})} placeholder="Assignment title" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><textarea value={assignmentForm.description} onChange={(e)=>setAssignmentForm({...assignmentForm,description:e.target.value})} placeholder="Description" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><textarea value={assignmentForm.instructions} onChange={(e)=>setAssignmentForm({...assignmentForm,instructions:e.target.value})} placeholder="Instructions" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><select value={assignmentForm.type} onChange={(e)=>setAssignmentForm({...assignmentForm,type:e.target.value as 'individual' | 'group'})} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="individual">Individual</option><option value="group">Group</option></select><div className="flex gap-2"><button onClick={()=>{setAddAssignmentOpen(false);setAssignmentForm(initialAssignmentForm);}} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button><button onClick={createAssignmentFromModal} className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm text-white">Create</button></div></div></div>}
+
+      {addModuleOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-3"><h2 className="text-lg font-semibold text-slate-900">Add Module</h2><input value={moduleForm.title} onChange={(e)=>setModuleForm({...moduleForm,title:e.target.value})} placeholder="Module title" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><textarea value={moduleForm.description} onChange={(e)=>setModuleForm({...moduleForm,description:e.target.value})} placeholder="Description" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><div className="flex gap-2"><button onClick={()=>setAddModuleOpen(false)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button><button onClick={async()=>{try{if(!curriculumCourseId){showToast('Select a course first.');return;}if(moduleForm.title.trim().length<3){showToast('Module title must be at least 3 characters.');return;}await createModule({courseId:curriculumCourseId,body:{title:moduleForm.title.trim(),description:moduleForm.description||undefined,orderIndex:(curriculum?.modules?.length??0)+1}}).unwrap();setModuleForm({title:'',description:'',duration:''});setAddModuleOpen(false);await refetchCurriculum();showToast('Module added successfully.');}catch(error){const apiError=error as {data?:{message?:string|string[]}};const rawMessage=apiError?.data?.message;const message=Array.isArray(rawMessage)?rawMessage.join(', '):rawMessage||'Failed to add module';showToast(message);}}} className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm text-white">Add</button></div></div></div>}
+      {addLessonOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl space-y-3"><h2 className="text-lg font-semibold text-slate-900">Add Lesson</h2><select value={lessonForm.moduleId} onChange={(e)=>setLessonForm({...lessonForm,moduleId:e.target.value})} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Select module</option>{(curriculum?.modules??[]).map((m)=><option key={m.id} value={m.id}>{m.orderIndex}. {m.title}</option>)}</select><input value={lessonForm.title} onChange={(e)=>setLessonForm({...lessonForm,title:e.target.value})} placeholder="Lesson title" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><select value={lessonContentType} onChange={(e)=>setLessonContentType(e.target.value as 'text'|'video'|'file'|'external_link')} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="text">Text</option><option value="video">Video URL</option><option value="file">File URL (pdf/doc/ppt)</option><option value="external_link">External Link</option></select>{lessonContentType==='external_link' && <input value={lessonContentLinkTitle} onChange={(e)=>setLessonContentLinkTitle(e.target.value)} placeholder="Link title" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />}{lessonContentType==='text' ? <textarea value={lessonContentValue} onChange={(e)=>setLessonContentValue(e.target.value)} placeholder="Text content" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /> : <input value={lessonContentValue} onChange={(e)=>setLessonContentValue(e.target.value)} placeholder={lessonContentType==='video'?'Video URL':lessonContentType==='file'?'File URL (pdf/doc/ppt)':'External URL'} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />}<div className="flex gap-2"><button onClick={()=>setAddLessonOpen(false)} className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</button><button onClick={async()=>{try{if(!lessonForm.moduleId){showToast('Select a module first.');return;}if(lessonForm.title.trim().length<3){showToast('Lesson title must be at least 3 characters.');return;}if(!lessonContentValue.trim()){showToast('Provide lesson content.');return;}const mod=(curriculum?.modules??[]).find((m)=>m.id===lessonForm.moduleId);const contentPayload=lessonContentType==='text'?{type:'text' as const,orderIndex:1,content:lessonContentValue.trim()}:lessonContentType==='external_link'?{type:'external_link' as const,orderIndex:1,linkTitle:lessonContentLinkTitle.trim() || 'Resource',linkUrl:lessonContentValue.trim()}:{type:lessonContentType as 'video'|'file',orderIndex:1,url:lessonContentValue.trim()};await createLesson({moduleId:lessonForm.moduleId,body:{title:lessonForm.title.trim(),type:lessonForm.type,description:lessonForm.description||undefined,orderIndex:(mod?.lessons?.length??0)+1,contents:[contentPayload]}}).unwrap();setLessonForm((prev)=>({...prev,title:'',description:'',duration:''}));setLessonContentValue('');setLessonContentLinkTitle('');setLessonContentType('text');setAddLessonOpen(false);await refetchCurriculum();showToast('Lesson added successfully.');}catch(error){const apiError=error as {data?:{message?:string|string[]}};const rawMessage=apiError?.data?.message;const message=Array.isArray(rawMessage)?rawMessage.join(', '):rawMessage||'Failed to add lesson';showToast(message);}}} className="flex-1 rounded-lg bg-blue-900 px-4 py-2 text-sm text-white">Add</button></div></div></div>}
     </div>
   );
 }

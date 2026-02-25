@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
-  BookOpen,
   ClipboardCheck,
   Code2,
   FolderKanban,
@@ -15,9 +14,17 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '@/components/student/StudentSidebar';
 import { clubs as allClubs } from '@/data/clubs';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
-import { studentCourses } from '@/data/studentCourses';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
 import { addNotification } from '@/utils/notifications';
+import { useGetActiveClubsQuery } from '@/features/ClubsApi';
+import { useGetUserMembershipsQuery } from '@/features/UsersApi';
+import { useGetCoursesByClubIdsQuery } from '@/features/CoursesApi';
+import { useGetAssignmentsByCourseIdsQuery } from '@/features/AssignmentsApi';
+import { useGetProjectsByCourseIdsQuery } from '@/features/ProjectsApi';
+import {
+  computeCourseProgress,
+  type StoredCourseProgress,
+} from '@/utils/courseProgress';
 
 const defaultMembers = [
   { name: 'Amina K.', role: 'Club Lead', status: 'online' },
@@ -51,27 +58,6 @@ const codingCategories = [
   'devops engineering',
 ];
 
-type LeaderAssignment = {
-  id: number;
-  title: string;
-  description: string;
-  dueDate: string;
-  clubId: number;
-  clubName: string;
-  createdAt: string;
-};
-
-type StudentAssignmentSubmission = {
-  assignmentId: number;
-  clubId: number;
-  email: string;
-  fullName: string;
-  submissionText: string;
-  submissionLink: string;
-  submittedAt: string;
-  updatedAt: string;
-};
-
 export default function StudentClubPage() {
   const navigate = useNavigate();
   const [selectedLanguage, setSelectedLanguage] = useState('JavaScript');
@@ -79,23 +65,20 @@ export default function StudentClubPage() {
   const [output, setOutput] = useState('Run the code to see output.');
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState(initialMessages);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
-  const [submissionNotes, setSubmissionNotes] = useState('');
-  const [submissionCode, setSubmissionCode] = useState('');
-  const [assignmentSubmissionText, setAssignmentSubmissionText] = useState('');
-  const [assignmentSubmissionLink, setAssignmentSubmissionLink] = useState('');
-  const [assignmentError, setAssignmentError] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const authUser = useMemo(() => {
     try {
       const raw = localStorage.getItem('authUser');
-      return raw ? (JSON.parse(raw) as { email?: string }) : {};
+      return raw ? (JSON.parse(raw) as { id?: string; email?: string }) : {};
     } catch {
       return {};
     }
   }, []);
+  const { data: activeClubs = [] } = useGetActiveClubsQuery();
+  const { data: memberships = [] } = useGetUserMembershipsQuery(authUser.id ?? '', {
+    skip: !authUser.id,
+  });
 
   const studentProfile = useMemo(() => {
     try {
@@ -107,29 +90,45 @@ export default function StudentClubPage() {
     }
   }, [authUser.email]);
 
-  const [joinedClubIds, setJoinedClubIds] = useState<number[]>(() => {
+  const [localJoinedClubIds, setLocalJoinedClubIds] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem('studentJoinedClubs');
-      return raw ? (JSON.parse(raw) as number[]) : [];
+      return raw ? (JSON.parse(raw) as Array<string | number>).map(String) : [];
     } catch {
       return [];
     }
   });
 
+  const joinedClubIds = useMemo(() => {
+    const fromMemberships = memberships
+      .filter((membership) => membership.status === 'active' && membership.clubId)
+      .map((membership) => String(membership.clubId));
+    if (fromMemberships.length > 0) {
+      return Array.from(new Set(fromMemberships));
+    }
+    return localJoinedClubIds;
+  }, [localJoinedClubIds, memberships]);
+
   const mergedClubs = useMemo(() => {
     try {
       const stored = localStorage.getItem('leaderCreatedClubs');
       const leaderClubs = stored ? JSON.parse(stored) : [];
-      return [...leaderClubs, ...allClubs];
+      return [...activeClubs, ...leaderClubs, ...allClubs];
     } catch {
-      return allClubs;
+      return [...activeClubs, ...allClubs];
     }
-  }, []);
+  }, [activeClubs]);
 
   const normalizedClubs = useMemo(() => {
     return mergedClubs.map((club) => ({
       ...club,
-      tags: club.tags ?? (club.category ? [club.category, 'Community', 'Projects'] : []),
+      tags:
+        club.tags ??
+        (club.category?.name
+          ? [club.category.name, 'Community', 'Projects']
+          : club.category
+            ? [club.category, 'Community', 'Projects']
+            : []),
       projectList: club.projectList ?? [],
       stats: club.stats ?? { joinedMembers: 0, projects: club.projectsCount ?? 0, modules: club.modulesCount ?? 0 },
       projectsCount: club.projectsCount ?? 0,
@@ -138,148 +137,87 @@ export default function StudentClubPage() {
   }, [mergedClubs]);
 
   const joinedClubs = useMemo(
-    () => normalizedClubs.filter((club) => joinedClubIds.includes(club.id)),
+    () => normalizedClubs.filter((club) => joinedClubIds.includes(String(club.id))),
     [joinedClubIds, normalizedClubs]
   );
 
-  const [activeClubId, setActiveClubId] = useState<number | null>(
-    joinedClubs[0]?.id ?? null
+  const [activeClubId, setActiveClubId] = useState<string | null>(
+    joinedClubs[0] ? String(joinedClubs[0].id) : null
   );
 
-  const activeClub = joinedClubs.find((club) => club.id === activeClubId) ?? joinedClubs[0];
+  const activeClub =
+    joinedClubs.find((club) => String(club.id) === String(activeClubId)) ?? joinedClubs[0];
 
-  const leaderProjects = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('leaderProjects');
-      return raw ? (JSON.parse(raw) as { id: number; clubId: number; name: string; summary: string; progress: number }[]) : [];
-    } catch {
-      return [];
-    }
-  }, []);
-
-  const leaderCourses = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('leaderCourses');
-      const stored = raw ? (JSON.parse(raw) as (typeof studentCourses[number] & { clubId?: number })[]) : [];
-      return stored.filter((course) => !course.clubId || joinedClubIds.includes(course.clubId));
-    } catch {
-      return [];
-    }
-  }, [joinedClubIds]);
-
-  const clubProjects = useMemo(
-    () => leaderProjects.filter((project) => project.clubId === activeClub?.id),
-    [leaderProjects, activeClub]
-  );
-
-  const leaderAssignments = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('leaderAssignments');
-      const stored = raw ? (JSON.parse(raw) as LeaderAssignment[]) : [];
-      return stored;
-    } catch {
-      return [];
-    }
-  }, []);
-
-  const clubAssignments = useMemo(
-    () => leaderAssignments
-      .filter((assignment) => assignment.clubId === activeClub?.id)
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()),
-    [leaderAssignments, activeClub]
-  );
-
-  const [submissions, setSubmissions] = useState(() => {
-    try {
-      const raw = localStorage.getItem('studentProjectSubmissions');
-      return raw
-        ? (JSON.parse(raw) as {
-            projectId: number;
-            clubId: number;
-            email: string;
-            fullName: string;
-            progress: number;
-            notes: string;
-            code: string;
-            updatedAt: string;
-          }[])
-        : [];
-    } catch {
-      return [];
-    }
+  const { data: clubCourses = [] } = useGetCoursesByClubIdsQuery(joinedClubIds, {
+    skip: joinedClubIds.length === 0,
   });
-
-  const [assignmentSubmissions, setAssignmentSubmissions] = useState<StudentAssignmentSubmission[]>(() => {
-    try {
-      const raw = localStorage.getItem('studentAssignmentSubmissions');
-      return raw ? (JSON.parse(raw) as StudentAssignmentSubmission[]) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const currentSubmission = useMemo(() => {
-    if (!selectedProjectId || !authUser.email) return undefined;
-    return submissions.find(
-      (submission) => submission.projectId === selectedProjectId && submission.email === authUser.email
-    );
-  }, [selectedProjectId, submissions, authUser.email]);
-
-  const currentAssignmentSubmission = useMemo(() => {
-    if (!selectedAssignmentId || !authUser.email) return undefined;
-    return assignmentSubmissions.find(
-      (submission) =>
-        submission.assignmentId === selectedAssignmentId && submission.email === authUser.email
-    );
-  }, [selectedAssignmentId, assignmentSubmissions, authUser.email]);
-
-  const submittedAssignmentIds = useMemo(() => {
-    if (!authUser.email) return new Set<number>();
-    return new Set(
-      assignmentSubmissions
-        .filter((submission) => submission.email === authUser.email)
-        .map((submission) => submission.assignmentId)
-    );
-  }, [assignmentSubmissions, authUser.email]);
-
-  const computeProgress = (codeText: string, noteText: string, previousCount: number) => {
-    const codeScore = Math.min(70, Math.round((codeText.trim().length / 400) * 70));
-    const noteScore = Math.min(20, Math.round((noteText.trim().length / 120) * 20));
-    const consistencyScore = Math.min(10, previousCount * 2);
-    return Math.min(100, codeScore + noteScore + consistencyScore);
-  };
+  const visibleClubCourses = useMemo(
+    () => clubCourses.filter((course) => course.status !== 'archived'),
+    [clubCourses]
+  );
 
   useEffect(() => {
     if (!activeClubId && joinedClubs.length > 0) {
-      setActiveClubId(joinedClubs[0].id);
+      setActiveClubId(String(joinedClubs[0].id));
     }
   }, [activeClubId, joinedClubs]);
 
-  const allCourses = useMemo(() => {
-    const catalog = [...leaderCourses, ...studentCourses];
-    const tags = joinedClubs.flatMap((club) => club.tags ?? []);
-    if (tags.length === 0) return catalog;
-    const lowerTags = tags.map((tag) => tag.toLowerCase());
-    const matched = catalog.filter((course) =>
-      lowerTags.some((tag) => course.title.toLowerCase().includes(tag))
-    );
-    return matched.length > 0 ? matched : catalog;
-  }, [joinedClubs, leaderCourses]);
+  const activeClubCourses = useMemo(() => {
+    if (visibleClubCourses.length === 0) return [];
+    if (!activeClub) return visibleClubCourses;
 
-  const courseList = useMemo(() => {
-    if (!activeClub) return [];
-    const lowerTags = activeClub.tags.map((tag) => tag.toLowerCase());
-    const matched = allCourses.filter((course) =>
-      lowerTags.some((tag) => course.title.toLowerCase().includes(tag))
+    const exact = visibleClubCourses.filter(
+      (course) => String(course.clubId) === String(activeClub.id)
     );
-    return matched.length > 0 ? matched : allCourses.slice(0, 3);
-  }, [activeClub, allCourses]);
+
+    return exact.length > 0 ? exact : visibleClubCourses;
+  }, [activeClub, visibleClubCourses]);
+
+  const activeCourseIds = useMemo(
+    () => activeClubCourses.map((course) => course.id),
+    [activeClubCourses]
+  );
+
+  const { data: assignmentCatalog = [] } = useGetAssignmentsByCourseIdsQuery(activeCourseIds, {
+    skip: activeCourseIds.length === 0,
+  });
+  const { data: projectCatalog = [] } = useGetProjectsByCourseIdsQuery(activeCourseIds, {
+    skip: activeCourseIds.length === 0,
+  });
+
+  const clubAssignments = useMemo(
+    () => assignmentCatalog
+      .filter((assignment) => assignment.status !== 'closed')
+      .sort((a, b) => {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }),
+    [assignmentCatalog]
+  );
+
+  const clubProjects = useMemo(
+    () => projectCatalog.filter((project) => project.status !== 'archived'),
+    [projectCatalog]
+  );
+
+  const courseTitleById = useMemo(
+    () =>
+      activeClubCourses.reduce<Record<string, string>>((acc, course) => {
+        acc[course.id] = course.title;
+        return acc;
+      }, {}),
+    [activeClubCourses]
+  );
 
   const showWorkspace = useMemo(() => {
     if (!activeClub) return false;
     const tagMatch = activeClub.tags.some((tag) => codingTags.includes(tag));
-    const categoryMatch = activeClub.category
-      ? codingCategories.includes(String(activeClub.category).toLowerCase())
+    const categoryValue =
+      typeof activeClub.category === 'string' ? activeClub.category : activeClub.category?.name;
+    const categoryMatch = categoryValue
+      ? codingCategories.includes(categoryValue.toLowerCase())
       : false;
     return tagMatch || categoryMatch;
   }, [activeClub]);
@@ -315,96 +253,22 @@ export default function StudentClubPage() {
     setChatInput('');
   };
 
-  const handleOpenProject = (projectId: number) => {
-    setSelectedProjectId(projectId);
-    const existing = submissions.find(
-      (submission) => submission.projectId === projectId && submission.email === authUser.email
-    );
-    setSubmissionNotes(existing?.notes ?? '');
-    setSubmissionCode(existing?.code ?? '');
-  };
-
-  const handleSubmitProgress = () => {
-    if (!selectedProjectId || !authUser.email || !activeClub) return;
-    const previousCount = submissions.filter(
-      (entry) => entry.projectId === selectedProjectId && entry.email === authUser.email
-    ).length;
-    const progress = computeProgress(submissionCode, submissionNotes, previousCount);
-    const nextEntry = {
-      projectId: selectedProjectId,
-      clubId: activeClub.id,
-      email: authUser.email,
-      fullName: studentProfile?.fullName || authUser.email.split('@')[0] || 'Student',
-      progress,
-      notes: submissionNotes.trim(),
-      code: submissionCode,
-      updatedAt: new Date().toISOString(),
-    };
-    const next = [
-      ...submissions.filter(
-        (entry) => !(entry.projectId === selectedProjectId && entry.email === authUser.email)
-      ),
-      nextEntry,
-    ];
-    localStorage.setItem('studentProjectSubmissions', JSON.stringify(next));
-    setSubmissions(next);
-  };
-
-  const handleOpenAssignment = (assignmentId: number) => {
-    setSelectedAssignmentId(assignmentId);
-    setAssignmentError('');
-    const existing = assignmentSubmissions.find(
-      (submission) => submission.assignmentId === assignmentId && submission.email === authUser.email
-    );
-    setAssignmentSubmissionText(existing?.submissionText ?? '');
-    setAssignmentSubmissionLink(existing?.submissionLink ?? '');
-  };
-
-  const handleSubmitAssignment = () => {
-    if (!selectedAssignmentId || !authUser.email || !activeClub) return;
-    const cleanText = assignmentSubmissionText.trim();
-    const cleanLink = assignmentSubmissionLink.trim();
-    if (!cleanText && !cleanLink) {
-      setAssignmentError('Add submission notes or a link before submitting.');
-      return;
-    }
-    const now = new Date().toISOString();
-    const nextEntry: StudentAssignmentSubmission = {
-      assignmentId: selectedAssignmentId,
-      clubId: activeClub.id,
-      email: authUser.email,
-      fullName: studentProfile?.fullName || authUser.email.split('@')[0] || 'Student',
-      submissionText: cleanText,
-      submissionLink: cleanLink,
-      submittedAt: currentAssignmentSubmission?.submittedAt ?? now,
-      updatedAt: now
-    };
-    const next = [
-      ...assignmentSubmissions.filter(
-        (entry) => !(entry.assignmentId === selectedAssignmentId && entry.email === authUser.email)
-      ),
-      nextEntry
-    ];
-    localStorage.setItem('studentAssignmentSubmissions', JSON.stringify(next));
-    setAssignmentSubmissions(next);
-    setAssignmentError('');
-  };
-
   const handleLeaveClub = () => {
     if (!activeClub) return;
     if (!confirm(`Leave ${activeClub.name}?`)) return;
 
-    const nextJoined = joinedClubIds.filter((clubId) => clubId !== activeClub.id);
+    const nextJoined = joinedClubIds.filter((clubId) => String(clubId) !== String(activeClub.id));
     localStorage.setItem('studentJoinedClubs', JSON.stringify(nextJoined));
-    setJoinedClubIds(nextJoined);
-    setSelectedProjectId(null);
-    setSelectedAssignmentId(null);
+    setLocalJoinedClubIds(nextJoined);
 
     try {
+      const activeClubKey = String(activeClub.id);
       const membersRaw = localStorage.getItem('clubMembers');
-      const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string; fullName?: string }[]>) : {};
-      const clubMembers = membersByClub[activeClub.id] || [];
-      membersByClub[activeClub.id] = clubMembers.filter((member) => member.email !== authUser.email);
+      const membersByClub = membersRaw
+        ? (JSON.parse(membersRaw) as Record<string, { email: string; fullName?: string }[]>)
+        : {};
+      const clubMembers = membersByClub[activeClubKey] || [];
+      membersByClub[activeClubKey] = clubMembers.filter((member) => member.email !== authUser.email);
       localStorage.setItem('clubMembers', JSON.stringify(membersByClub));
     } catch {
       // Ignore member storage errors for demo flow
@@ -413,14 +277,15 @@ export default function StudentClubPage() {
     try {
       const createdRaw = localStorage.getItem('leaderCreatedClubs');
       if (createdRaw) {
-        const created = JSON.parse(createdRaw) as Array<{ id: number; stats?: { joinedMembers: number } }>;
+        const activeClubKey = String(activeClub.id);
+        const created = JSON.parse(createdRaw) as Array<{ id: number | string; stats?: { joinedMembers: number } }>;
         const membersRaw = localStorage.getItem('clubMembers');
-        const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string }[]>) : {};
+        const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<string, { email: string }[]>) : {};
         const nextClubs = created.map((clubItem) => {
-          if (clubItem.id !== activeClub.id) return clubItem;
+          if (String(clubItem.id) !== String(activeClub.id)) return clubItem;
           return {
             ...clubItem,
-            stats: { joinedMembers: (membersByClub[activeClub.id] || []).length }
+            stats: { joinedMembers: (membersByClub[activeClubKey] || []).length }
           };
         });
         localStorage.setItem('leaderCreatedClubs', JSON.stringify(nextClubs));
@@ -436,10 +301,31 @@ export default function StudentClubPage() {
       setActiveClubId(null);
       return;
     }
-    if (activeClubId === activeClub.id) {
-      setActiveClubId(nextJoined[0]);
+    if (String(activeClubId) === String(activeClub.id)) {
+      setActiveClubId(String(nextJoined[0]));
     }
   };
+
+  const memberSummary = useMemo(() => {
+    if (!activeClub) return `${defaultMembers.length} members`;
+    try {
+      const membersRaw = localStorage.getItem('clubMembers');
+      const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<string, { email: string }[]>) : {};
+      const count = membersByClub[String(activeClub.id)]?.length ?? 0;
+      return `${Math.max(defaultMembers.length, count)} members`;
+    } catch {
+      return `${Math.max(defaultMembers.length, activeClub.stats.joinedMembers)} members`;
+    }
+  }, [activeClub]);
+
+  const progressByCourse = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(`studentCourseProgress:${authUser.email ?? 'anonymous'}`);
+      return raw ? (JSON.parse(raw) as Record<string, StoredCourseProgress>) : {};
+    } catch {
+      return {};
+    }
+  }, [authUser.email]);
 
   if (!activeClub) {
     return (
@@ -475,26 +361,6 @@ export default function StudentClubPage() {
       </div>
     );
   }
-
-  const memberSummary = useMemo(() => {
-    try {
-      const membersRaw = localStorage.getItem('clubMembers');
-      const membersByClub = membersRaw ? (JSON.parse(membersRaw) as Record<number, { email: string }[]>) : {};
-      const count = membersByClub[activeClub.id]?.length ?? 0;
-      return `${Math.max(defaultMembers.length, count)} members`;
-    } catch {
-      return `${Math.max(defaultMembers.length, activeClub.stats.joinedMembers)} members`;
-    }
-  }, [activeClub]);
-
-  const progressByCourse = useMemo(() => {
-    try {
-      const raw = localStorage.getItem(`studentCourseProgress:${authUser.email ?? 'anonymous'}`);
-      return raw ? (JSON.parse(raw) as Record<string, { completedLessons: string[] }>) : {};
-    } catch {
-      return {};
-    }
-  }, [authUser.email]);
 
   return (
     <div className="min-h-screen w-full bg-slate-100">
@@ -538,9 +404,9 @@ export default function StudentClubPage() {
               {joinedClubs.map((club) => (
                 <button
                   key={club.id}
-                  onClick={() => setActiveClubId(club.id)}
+                  onClick={() => setActiveClubId(String(club.id))}
                   className={`rounded-full px-4 py-1 text-xs font-semibold transition ${
-                    activeClubId === club.id
+                    String(activeClubId) === String(club.id)
                       ? 'bg-blue-900 text-white'
                       : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-200'
                   }`}
@@ -581,16 +447,18 @@ export default function StudentClubPage() {
               <div className="rounded-2xl border border-slate-200 p-4">
                 <p className="text-xs text-slate-500">Members</p>
                 <p className="text-lg font-semibold text-slate-900 mt-1">{memberSummary}</p>
-                <p className="text-xs text-blue-600 mt-2">{activeClub.category}</p>
+                <p className="text-xs text-blue-600 mt-2">
+                  {typeof activeClub.category === 'string' ? activeClub.category : activeClub.category?.name}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-200 p-4">
                 <p className="text-xs text-slate-500">Active Courses</p>
-                <p className="text-lg font-semibold text-slate-900 mt-1">{activeClub.modulesCount}</p>
+                <p className="text-lg font-semibold text-slate-900 mt-1">{activeClubCourses.length}</p>
                 <p className="text-xs text-slate-500 mt-2">Weekly reviews every Friday</p>
               </div>
               <div className="rounded-2xl border border-slate-200 p-4">
                 <p className="text-xs text-slate-500">Active Projects</p>
-                <p className="text-lg font-semibold text-slate-900 mt-1">{activeClub.projectsCount}</p>
+                <p className="text-lg font-semibold text-slate-900 mt-1">{clubProjects.length}</p>
                 <p className="text-xs text-slate-500 mt-2">Next demo in 3 days</p>
               </div>
             </div>
@@ -609,11 +477,19 @@ export default function StudentClubPage() {
                   </button>
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {allCourses.slice(0, 4).map((course) => {
-                    const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-                    const completed = progressByCourse[course.id]?.completedLessons?.length ?? 0;
-                    const progress = totalLessons ? Math.round((completed / totalLessons) * 100) : 0;
-                    const status = progress >= 100 ? 'Completed' : progress > 0 ? 'In progress' : 'Not started';
+                  {activeClubCourses.slice(0, 4).map((course) => {
+                    const totalLessons = (course.modules ?? []).reduce((sum, mod) => sum + (mod.lessons?.length ?? 0), 0);
+                    const storedProgress = progressByCourse[course.id];
+                    const metrics = computeCourseProgress({
+                      lessonTotal: totalLessons,
+                      completedLessons: storedProgress?.completedLessons?.length ?? 0,
+                      requiredAssignments: storedProgress?.requiredAssignments ?? 0,
+                      completedAssignments: storedProgress?.completedAssignmentIds?.length ?? 0,
+                      requiredProjects: storedProgress?.requiredProjects ?? 0,
+                      completedProjects: storedProgress?.completedProjectIds?.length ?? 0,
+                    });
+                    const progress = metrics.percent;
+                    const status = metrics.isCompleted ? 'Completed' : progress > 0 ? 'In progress' : 'Not started';
                     return (
                     <div key={course.title} className="rounded-2xl border border-slate-200 p-4">
                       <div className="flex items-center justify-between">
@@ -621,7 +497,7 @@ export default function StudentClubPage() {
                           {status}
                         </span>
                         <span className="text-xs text-slate-400">
-                          {course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0)} lessons
+                          {(course.modules ?? []).reduce((sum, mod) => sum + (mod.lessons?.length ?? 0), 0)} lessons
                         </span>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-slate-900">{course.title}</p>
@@ -642,59 +518,14 @@ export default function StudentClubPage() {
                       )}
                     </div>
                   )})}
-                  {allCourses.length === 0 && (
+                  {activeClubCourses.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                      Join a club to unlock courses.
+                      No courses available for this club yet.
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="rounded-3xl bg-white border border-slate-200 p-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-900">Club Courses</h2>
-                  <BookOpen className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="mt-4 space-y-3">
-                  {courseList.map((course) => {
-                    const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-                    const completed = progressByCourse[course.id]?.completedLessons?.length ?? 0;
-                    const progress = totalLessons ? Math.round((completed / totalLessons) * 100) : 0;
-                    const status = progress >= 100 ? 'Completed' : progress > 0 ? 'In progress' : 'Not started';
-                    return (
-                    <div key={course.title} className="rounded-2xl border border-slate-200 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{course.title}</p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            {course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0)} lessons · {status}
-                          </p>
-                        </div>
-                        {status === 'Completed' ? (
-                          <button
-                            className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
-                            disabled
-                          >
-                            Completed
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => navigate(`/student/courses/${course.id}`)}
-                            className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
-                          >
-                            {status === 'In progress' ? 'Resume' : 'Continue'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )})}
-                  {courseList.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                      No active courses yet.
-                    </div>
-                  )}
-                </div>
-              </div>
 
               <div className="rounded-3xl bg-white border border-slate-200 p-6">
                 <div className="flex items-center justify-between">
@@ -703,32 +534,35 @@ export default function StudentClubPage() {
                 </div>
                 <div className="mt-4 space-y-3">
                   {clubAssignments.map((assignment) => {
-                    const isSubmitted = submittedAssignmentIds.has(assignment.id);
-                    const dueLabel = new Date(assignment.dueDate).toLocaleDateString();
+                    const dueLabel = assignment.dueDate
+                      ? new Date(assignment.dueDate).toLocaleDateString()
+                      : 'No due date';
                     return (
-                      <button
+                      <div
                         key={assignment.id}
-                        onClick={() => handleOpenAssignment(assignment.id)}
-                        className="w-full text-left rounded-2xl border border-slate-200 p-4 hover:border-blue-200"
+                        className="w-full rounded-2xl border border-slate-200 p-4"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-900">{assignment.title}</p>
-                          <span
-                            className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-                              isSubmitted
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-amber-50 text-amber-700'
-                            }`}
-                          >
-                            {isSubmitted ? 'Submitted' : 'Pending'}
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">
+                            {assignment.type}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 mt-1">{assignment.description}</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Course: {courseTitleById[assignment.courseId] ?? 'Unknown course'}
+                        </p>
                         <p className="text-xs text-blue-600 mt-2 inline-flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5" />
                           Due {dueLabel}
                         </p>
-                      </button>
+                        <button
+                          onClick={() => navigate(`/student/courses/${assignment.courseId}`)}
+                          className="mt-3 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                        >
+                          Open Course
+                        </button>
+                      </div>
                     );
                   })}
                   {clubAssignments.length === 0 && (
@@ -739,59 +573,6 @@ export default function StudentClubPage() {
                 </div>
               </div>
 
-              {selectedAssignmentId && (
-                <div className="rounded-3xl bg-white border border-slate-200 p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-slate-900">Assignment Submission</h2>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Submit your work summary or reference link.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedAssignmentId(null)}
-                      className="text-xs font-semibold text-slate-500 hover:text-slate-700"
-                    >
-                      Close
-                    </button>
-                  </div>
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500">Submission Notes</label>
-                      <textarea
-                        value={assignmentSubmissionText}
-                        onChange={(event) => setAssignmentSubmissionText(event.target.value)}
-                        rows={4}
-                        placeholder="Describe what you completed..."
-                        className="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500">Work Link (Optional)</label>
-                      <input
-                        value={assignmentSubmissionLink}
-                        onChange={(event) => setAssignmentSubmissionLink(event.target.value)}
-                        placeholder="https://github.com/... or drive link"
-                        className="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    {assignmentError && (
-                      <p className="text-xs text-red-600">{assignmentError}</p>
-                    )}
-                    {currentAssignmentSubmission && (
-                      <p className="text-xs text-slate-400">
-                        Last submitted: {new Date(currentAssignmentSubmission.updatedAt).toLocaleString()}
-                      </p>
-                    )}
-                    <button
-                      onClick={handleSubmitAssignment}
-                      className="rounded-lg bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                    >
-                      Submit Assignment
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div className="rounded-3xl bg-white border border-slate-200 p-6">
                 <div className="flex items-center justify-between">
@@ -800,24 +581,24 @@ export default function StudentClubPage() {
                 </div>
                 <div className="mt-4 space-y-3">
                   {clubProjects.map((project) => (
-                    <button
+                    <div
                       key={project.id}
-                      onClick={() => handleOpenProject(project.id)}
-                      className="w-full text-left rounded-2xl border border-slate-200 p-4 hover:border-blue-200"
+                      className="w-full rounded-2xl border border-slate-200 p-4"
                     >
-                      <p className="text-sm font-semibold text-slate-900">{project.name}</p>
-                      <p className="text-xs text-slate-500 mt-1">{project.summary}</p>
-                      <p className="text-xs text-blue-600 mt-2">Open workspace</p>
-                    </button>
-                  ))}
-                  {clubProjects.length === 0 && activeClub.projectList.map((project) => (
-                    <div key={project.title} className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-sm font-semibold text-slate-900">{project.title}</p>
-                      <p className="text-xs text-slate-500 mt-1">{project.type}</p>
-                      <p className="text-xs text-blue-600 mt-2">Sprint tracker ready</p>
+                      <p className="text-xs text-slate-500 mt-1">{project.description}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Course: {courseTitleById[project.courseId] ?? 'Unknown course'}
+                      </p>
+                      <button
+                        onClick={() => navigate(`/student/courses/${project.courseId}`)}
+                        className="mt-3 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                      >
+                        Open Course
+                      </button>
                     </div>
                   ))}
-                  {clubProjects.length === 0 && activeClub.projectList.length === 0 && (
+                  {clubProjects.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
                       No active projects yet.
                     </div>
@@ -825,57 +606,6 @@ export default function StudentClubPage() {
                 </div>
               </div>
 
-              {selectedProjectId && (
-                <div className="rounded-3xl bg-white border border-slate-200 p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-slate-900">Project Workspace</h2>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Submit your code and notes. Progress is calculated automatically.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedProjectId(null)}
-                      className="text-xs font-semibold text-slate-500 hover:text-slate-700"
-                    >
-                      Close
-                    </button>
-                  </div>
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500">Code Submission</label>
-                      <textarea
-                        value={submissionCode}
-                        onChange={(event) => setSubmissionCode(event.target.value)}
-                        rows={6}
-                        placeholder="Paste the code or link to your work..."
-                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-900 px-3 py-3 text-xs text-slate-100 outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-500">What did you complete?</label>
-                      <textarea
-                        value={submissionNotes}
-                        onChange={(event) => setSubmissionNotes(event.target.value)}
-                        rows={3}
-                        placeholder="Share a short update..."
-                        className="mt-2 w-full rounded-2xl border border-slate-200 px-3 py-2 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    {currentSubmission && (
-                      <p className="text-xs text-slate-400">
-                        Last update: {new Date(currentSubmission.updatedAt).toLocaleString()}
-                      </p>
-                    )}
-                    <button
-                      onClick={handleSubmitProgress}
-                      className="rounded-lg bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                    >
-                      Submit Work
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {showWorkspace ? (
                 <div className="rounded-3xl bg-white border border-slate-200 p-6">

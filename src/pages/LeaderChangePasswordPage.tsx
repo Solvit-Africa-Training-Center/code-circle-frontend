@@ -65,7 +65,7 @@ export default function LeaderChangePasswordPage() {
 
     localStorage.setItem(
       'authUser',
-      JSON.stringify({ email: authUser.email, role: 'leader', mustChange: false, fullName: authUser.fullName })
+      JSON.stringify({ email: authUser.email, role: 'CLUB_LEADER', mustChange: false, fullName: authUser.fullName })
     );
     setSuccess('Password updated. Redirecting to your dashboard...');
     setTimeout(() => navigate('/leader/dashboard'), 900);

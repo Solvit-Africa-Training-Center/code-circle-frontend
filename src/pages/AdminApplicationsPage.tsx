@@ -1,224 +1,243 @@
-import { Menu } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import emailjs from '@emailjs/browser';
+import {
+  CheckCircle2,
+  Menu,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import {
+  useGetAdminLeaderApplicationsQuery,
+  useReviewLeaderApplicationMutation,
+} from '@/features/LeaderApplicationApi';
+import type {
+  AdminLeaderApplication,
+  LeaderApplicationReviewStatus,
+} from '@/types/leaderApplication';
 
-type Application = {
-  id: string;
-  status: 'pending' | 'approved' | 'denied';
-  submittedAt: string;
-  category: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  experience: string;
-  bio?: string;
-  cvFileName?: string;
-  cvFileData?: string;
-  degreeFileName?: string;
-  degreeFileData?: string;
-  testResult?: {
-    score: number;
-    totalQuestions: number;
-    answeredCount: number;
-  };
-  approvedAt?: string;
-  deniedAt?: string;
+const mapStatus = (
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'NOT_REQUIRED',
+) => {
+  if (status === 'APPROVED') return 'approved';
+  if (status === 'REJECTED') return 'rejected';
+  return 'pending';
 };
 
-const generatePassword = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = 'LDR-';
-  for (let i = 0; i < 6; i += 1) {
-    out += chars[Math.floor(Math.random() * chars.length)];
+const normalizeExternalUrl = (value?: string): string | null => {
+  if (!value) return null;
+  const trimmed = value.trim().replace(/^["']|["']$/g, '');
+  if (!trimmed) return null;
+
+  const normalized = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed.replace(/^\/+/, '')}`;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return null;
   }
-  return out;
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  if (/example\.com\/mock-/i.test(trimmed)) return null;
+  return parsed.toString();
 };
+
+type SortMode = 'latest' | 'score_desc' | 'score_asc' | 'name';
 
 export default function AdminApplicationsPage() {
+  type ReviewDecision = 'APPROVE' | 'REJECT';
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeType, setNoticeType] = useState<'success' | 'error'>('success');
-  const [emailConfig, setEmailConfig] = useState<{
-    serviceId: string;
-    templateId: string;
-    publicKey: string;
-  } | null>(null);
-  const [applications, setApplications] = useState<Application[]>(() => {
-    try {
-      const raw = localStorage.getItem('leaderApplications');
-      return raw ? (JSON.parse(raw) as Application[]) : [];
-    } catch {
-      return [];
-    }
+  const [statusFilter, setStatusFilter] =
+    useState<LeaderApplicationReviewStatus>('PENDING');
+  const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('latest');
+  const [reviewModal, setReviewModal] = useState<{
+    open: boolean;
+    userId: string;
+    decision: ReviewDecision;
+    applicantName: string;
+  }>({
+    open: false,
+    userId: '',
+    decision: 'APPROVE',
+    applicantName: '',
   });
+  const [reviewNote, setReviewNote] = useState('');
 
-  const pendingCount = useMemo(
-    () => applications.filter((app) => app.status === 'pending').length,
-    [applications]
-  );
+  const pendingQuery = useGetAdminLeaderApplicationsQuery('PENDING');
+  const approvedQuery = useGetAdminLeaderApplicationsQuery('APPROVED');
+  const rejectedQuery = useGetAdminLeaderApplicationsQuery('REJECTED');
+  const [reviewLeaderApplication, { isLoading: isReviewing }] =
+    useReviewLeaderApplicationMutation();
 
-  const envServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-  const envTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-  const envPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  const statusFilterOptions: Array<{
+    value: LeaderApplicationReviewStatus;
+    label: string;
+    icon: ReactNode;
+    tone: string;
+    count: number;
+  }> = [
+    {
+      value: 'PENDING',
+      label: 'Pending',
+      icon: <ShieldAlert className="h-4 w-4" />,
+      tone: 'text-amber-700 bg-amber-50 border-amber-200',
+      count: pendingQuery.data?.length ?? 0,
+    },
+    {
+      value: 'APPROVED',
+      label: 'Approved',
+      icon: <ShieldCheck className="h-4 w-4" />,
+      tone: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+      count: approvedQuery.data?.length ?? 0,
+    },
+    {
+      value: 'REJECTED',
+      label: 'Rejected',
+      icon: <XCircle className="h-4 w-4" />,
+      tone: 'text-rose-700 bg-rose-50 border-rose-200',
+      count: rejectedQuery.data?.length ?? 0,
+    },
+  ];
 
-  useEffect(() => {
-    const publicKey = envPublicKey ?? emailConfig?.publicKey;
-    if (publicKey) {
-      emailjs.init(publicKey);
-    }
-  }, [envPublicKey, emailConfig]);
+  const applicationsForFilter: AdminLeaderApplication[] = useMemo(() => {
+    if (statusFilter === 'APPROVED') return approvedQuery.data ?? [];
+    if (statusFilter === 'REJECTED') return rejectedQuery.data ?? [];
+    return pendingQuery.data ?? [];
+  }, [
+    approvedQuery.data,
+    pendingQuery.data,
+    rejectedQuery.data,
+    statusFilter,
+  ]);
 
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const res = await fetch('/emailjs.json', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          serviceId?: string;
-          templateId?: string;
-          publicKey?: string;
-        };
-        if (data.serviceId && data.templateId && data.publicKey) {
-          setEmailConfig({
-            serviceId: data.serviceId,
-            templateId: data.templateId,
-            publicKey: data.publicKey
-          });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    if (!envServiceId || !envTemplateId || !envPublicKey) {
-      loadConfig();
-    }
-  }, [envServiceId, envTemplateId, envPublicKey]);
+  const displayedApplications = useMemo(() => {
+    const lowerQuery = query.trim().toLowerCase();
+    const filtered = applicationsForFilter.filter((app) => {
+      if (!lowerQuery) return true;
+      const category = app.test.category?.name ?? '';
+      const haystack = `${app.user.name} ${app.user.email} ${category}`.toLowerCase();
+      return haystack.includes(lowerQuery);
+    });
 
-  const persistApplications = (next: Application[]) => {
-    setApplications(next);
-    localStorage.setItem('leaderApplications', JSON.stringify(next));
+    return [...filtered].sort((a, b) => {
+      if (sortMode === 'name') return a.user.name.localeCompare(b.user.name);
+      if (sortMode === 'score_asc') return a.score - b.score;
+      if (sortMode === 'score_desc') return b.score - a.score;
+      const aDate = a.attemptedAt ? new Date(a.attemptedAt).getTime() : 0;
+      const bDate = b.attemptedAt ? new Date(b.attemptedAt).getTime() : 0;
+      return bDate - aDate;
+    });
+  }, [applicationsForFilter, query, sortMode]);
+
+  const isLoadingCurrent =
+    statusFilter === 'APPROVED'
+      ? approvedQuery.isLoading
+      : statusFilter === 'REJECTED'
+        ? rejectedQuery.isLoading
+        : pendingQuery.isLoading;
+
+  const isErrorCurrent =
+    statusFilter === 'APPROVED'
+      ? approvedQuery.isError
+      : statusFilter === 'REJECTED'
+        ? rejectedQuery.isError
+        : pendingQuery.isError;
+
+  const getErrorMessage = (err: unknown) => {
+    const response = err as { data?: { message?: string | string[] } };
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message[0] ?? 'Request failed.';
+    if (typeof message === 'string' && message.trim()) return message;
+    return 'Request failed.';
   };
 
-  const handleApprove = async (app: Application) => {
-    setNotice('');
-    const password = generatePassword();
-    const updated = applications.map(
-      (item): Application =>
-        item.id === app.id
-          ? { ...item, status: 'approved', approvedAt: new Date().toISOString() }
-          : item
-    );
-    persistApplications(updated);
+  const openReviewModal = (
+    userId: string,
+    decision: ReviewDecision,
+    applicantName: string,
+  ) => {
+    setReviewNote('');
+    setReviewModal({
+      open: true,
+      userId,
+      decision,
+      applicantName,
+    });
+  };
 
-    const existingCreds = (() => {
-      try {
-        const raw = localStorage.getItem('leaderCredentials');
-        return raw
-          ? (JSON.parse(raw) as { email: string; password: string; approvedAt: string; fullName?: string }[])
-          : [];
-      } catch {
-        return [];
-      }
-    })();
-    const filtered = existingCreds.filter((cred) => cred.email !== app.email);
-    const nextCreds = [{ email: app.email, password: '', approvedAt: new Date().toISOString(), fullName: app.fullName }, ...filtered];
-    localStorage.setItem('leaderCredentials', JSON.stringify(nextCreds));
+  const closeReviewModal = () => {
+    if (isReviewing) return;
+    setReviewModal((prev) => ({ ...prev, open: false }));
+    setReviewNote('');
+  };
 
-    const existingTemp = (() => {
-      try {
-        const raw = localStorage.getItem('leaderTempCredentials');
-        return raw
-          ? (JSON.parse(raw) as { email: string; password: string; expiresAt: string; issuedAt: string; fullName?: string }[])
-          : [];
-      } catch {
-        return [];
-      }
-    })();
-    const tempExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const tempCreds = [
-      { email: app.email, password, issuedAt: new Date().toISOString(), expiresAt: tempExpiresAt, fullName: app.fullName },
-      ...existingTemp.filter((cred) => cred.email !== app.email)
-    ];
-    localStorage.setItem('leaderTempCredentials', JSON.stringify(tempCreds));
+  const refreshAll = async () => {
+    await Promise.all([
+      pendingQuery.refetch(),
+      approvedQuery.refetch(),
+      rejectedQuery.refetch(),
+    ]);
+  };
 
-    const serviceId = envServiceId ?? emailConfig?.serviceId;
-    const templateId = envTemplateId ?? emailConfig?.templateId;
-    const publicKey = envPublicKey ?? emailConfig?.publicKey;
+  const handleReviewConfirm = async () => {
+    if (!reviewModal.open) return;
+    const { userId, decision, applicantName } = reviewModal;
+    const note = reviewNote.trim();
     try {
-      if (!serviceId || !templateId || !publicKey) {
-        setNoticeType('error');
-        setNotice('EmailJS config missing. Provide env vars or /emailjs.json.');
-        return;
-      }
-      await emailjs.send(
-        serviceId,
-        templateId,
-        {
-          email: app.email,
-          name: app.fullName,
-          username: app.email,
-          password,
-          from_name: 'CodeCircle'
-        },
-        publicKey
+      const result = await reviewLeaderApplication({
+        userId,
+        decision,
+        note: note || undefined,
+      }).unwrap();
+
+      const backendMessage = result?.message?.trim();
+      const emailIssue =
+        Boolean(backendMessage) &&
+        backendMessage.toLowerCase().includes('email could not be sent');
+
+      setNoticeType(emailIssue ? 'error' : 'success');
+      setNoticeTitle(
+        decision === 'APPROVE' ? 'Application Approved' : 'Application Rejected',
       );
-      setNoticeType('success');
-      setNotice('Approval email sent with temporary password.');
-    } catch (error) {
-      const message =
-        typeof error === 'object' && error && 'text' in error
-          ? String((error as { text?: string }).text)
-          : error instanceof Error
-            ? error.message
-            : 'Email service error.';
-      const hint =
-        message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network')
-          ? 'Check EmailJS Allowed Origins for localhost and your Vercel domain.'
-          : '';
-      setNoticeType('error');
       setNotice(
-        `Approval saved, but email failed to send. ${message} ${hint}`.trim()
+        backendMessage ||
+          (decision === 'APPROVE'
+            ? `${applicantName}'s application has been approved.`
+            : `${applicantName}'s application has been rejected.`),
       );
+      setReviewModal((prev) => ({ ...prev, open: false }));
+      setReviewNote('');
+      await refreshAll();
+    } catch (error) {
+      setNoticeType('error');
+      setNoticeTitle('Action Failed');
+      setNotice(getErrorMessage(error));
     }
-  };
-
-  const handleDeny = (app: Application) => {
-    const updated = applications.map(
-      (item): Application =>
-        item.id === app.id
-          ? { ...item, status: 'denied', deniedAt: new Date().toISOString() }
-          : item
-    );
-    persistApplications(updated);
-  };
-
-  const openStoredDocument = (dataUrl?: string) => {
-    if (!dataUrl) return;
-    window.open(dataUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  const downloadStoredDocument = (dataUrl?: string, fileName?: string) => {
-    if (!dataUrl) return;
-    const anchor = document.createElement('a');
-    anchor.href = dataUrl;
-    anchor.download = fileName || 'document';
-    anchor.rel = 'noreferrer';
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
   };
 
   return (
     <div className="min-h-screen w-full bg-slate-100">
       <div className="flex min-h-screen">
         <AdminSidebar active="applications" />
-        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Admin Menu">
+        <MobileSidebarDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          title="Admin Menu"
+        >
           <AdminSidebar active="applications" variant="mobile" />
         </MobileSidebarDrawer>
 
-        <main className="flex-1 px-5 py-6 lg:px-8 lg:ml-64">
+        <main className="flex-1 px-5 py-6 lg:ml-64 lg:px-8">
           <div className="flex items-center justify-between gap-4 lg:hidden">
             <button
               onClick={() => setDrawerOpen(true)}
@@ -230,142 +249,334 @@ export default function AdminApplicationsPage() {
           </div>
 
           <div className="mt-6">
-            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Leader Applications</h1>
-            <p className="text-sm text-slate-500 mt-2">
-              Review submitted applications and approve or deny.
+            <h1 className="text-2xl font-semibold text-slate-900 md:text-3xl">
+              Leader Applications
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Track pending, approved, and failed applications from database.
             </p>
           </div>
 
-          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-sm text-slate-600">Pending applications: <span className="font-semibold text-slate-900">{pendingCount}</span></p>
+          <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {statusFilterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setStatusFilter(option.value)}
+                className={`rounded-2xl border p-4 text-left transition-all ${
+                  statusFilter === option.value
+                    ? `${option.tone} ring-2 ring-offset-2 ring-slate-300`
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                    {option.icon}
+                    {option.label}
+                  </span>
+                  <span className="text-2xl font-bold">{option.count}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by name, email, or category"
+                  className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                />
+              </label>
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none"
+              >
+                <option value="latest">Sort: Latest</option>
+                <option value="score_desc">Sort: Highest Score</option>
+                <option value="score_asc">Sort: Lowest Score</option>
+                <option value="name">Sort: Name</option>
+              </select>
+            </div>
           </div>
 
           {notice && (
             <div
-              className={`mt-4 rounded-xl border p-4 text-sm ${
+              className={`mt-4 rounded-xl border p-4 ${
                 noticeType === 'success'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : 'border-rose-200 bg-rose-50 text-rose-800'
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : 'border-rose-200 bg-rose-50'
               }`}
             >
-              {notice}
+              <div className="flex items-start gap-3">
+                <span
+                  className={`mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                    noticeType === 'success'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-rose-600 text-white'
+                  }`}
+                >
+                  {noticeType === 'success' ? 'OK' : '!'}
+                </span>
+                <div>
+                  <p
+                    className={`text-sm font-semibold ${
+                      noticeType === 'success'
+                        ? 'text-emerald-900'
+                        : 'text-rose-900'
+                    }`}
+                  >
+                    {noticeTitle}
+                  </p>
+                  <p
+                    className={`mt-1 text-sm ${
+                      noticeType === 'success'
+                        ? 'text-emerald-800'
+                        : 'text-rose-800'
+                    }`}
+                  >
+                    {notice}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
           <div className="mt-6 space-y-4">
-            {applications.length === 0 ? (
+            {isLoadingCurrent ? (
               <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-                No applications submitted yet.
+                Loading applications...
+              </div>
+            ) : isErrorCurrent ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+                Failed to load applications. Please ensure you are logged in as admin.
+              </div>
+            ) : displayedApplications.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+                No {statusFilter.toLowerCase()} applications found.
               </div>
             ) : (
-              applications.map((app) => (
-                <div key={app.id} className="rounded-xl border border-slate-200 bg-white p-5">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div>
-                      <p className="text-lg font-semibold text-slate-900">{app.fullName}</p>
-                      <p className="text-sm text-slate-500">{app.email} • {app.category}</p>
-                      <p className="text-xs text-slate-400 mt-1">Submitted: {new Date(app.submittedAt).toLocaleString()}</p>
-                    </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        app.status === 'approved'
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : app.status === 'denied'
-                            ? 'bg-rose-50 text-rose-700'
-                            : 'bg-amber-50 text-amber-700'
-                      }`}
-                    >
-                      {app.status}
-                    </span>
-                  </div>
+              displayedApplications.map((app) => {
+                const status = mapStatus(app.reviewStatus);
+                const cvUrl = normalizeExternalUrl(app.user.cv);
+                const degreeUrl = normalizeExternalUrl(app.user.degree);
+                const videoUrl = normalizeExternalUrl(app.proctoringVideoUrl);
+                const passStatus = app.passed ? 'Passed test' : 'Failed test';
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="text-sm text-slate-600 space-y-1">
-                      <p><span className="font-semibold text-slate-900">Phone:</span> {app.phone}</p>
-                      <p><span className="font-semibold text-slate-900">Experience:</span> {app.experience}</p>
-                      {app.cvFileName && (
-                        <p>
-                          <span className="font-semibold text-slate-900">CV:</span>{' '}
-                          {app.cvFileData ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => openStoredDocument(app.cvFileData)}
-                                className="text-blue-700 underline"
-                              >
-                                View {app.cvFileName}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => downloadStoredDocument(app.cvFileData, app.cvFileName)}
-                                className="ml-3 text-blue-700 underline"
-                              >
-                                Download
-                              </button>
-                            </>
+                return (
+                  <div
+                    key={app.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-lg font-semibold text-slate-900">
+                          {app.user.name || 'Applicant'}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          {app.user.email} - {app.test.category?.name ?? 'N/A'}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Submitted:{' '}
+                          {app.attemptedAt
+                            ? new Date(app.attemptedAt).toLocaleString()
+                            : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            status === 'approved'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : status === 'rejected'
+                                ? 'bg-rose-50 text-rose-700'
+                                : 'bg-amber-50 text-amber-700'
+                          }`}
+                        >
+                          {status}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                            app.passed
+                              ? 'bg-cyan-50 text-cyan-700'
+                              : 'bg-rose-50 text-rose-700'
+                          }`}
+                        >
+                          {app.passed ? (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
                           ) : (
-                            app.cvFileName
+                            <XCircle className="h-3.5 w-3.5" />
+                          )}
+                          {passStatus}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1 text-sm text-slate-600">
+                        <p>
+                          <span className="font-semibold text-slate-900">Phone:</span>{' '}
+                          {app.user.phone ?? 'N/A'}
+                        </p>
+                        {cvUrl && (
+                          <p>
+                            <span className="font-semibold text-slate-900">CV:</span>{' '}
+                            <a
+                              href={cvUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-700 underline"
+                            >
+                              Open CV
+                            </a>
+                          </p>
+                        )}
+                        {degreeUrl && (
+                          <p>
+                            <span className="font-semibold text-slate-900">
+                              Degree:
+                            </span>{' '}
+                            <a
+                              href={degreeUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-700 underline"
+                            >
+                              Open Degree
+                            </a>
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-semibold text-slate-900">
+                            Proctoring Video:
+                          </span>{' '}
+                          {videoUrl ? (
+                            <a
+                              href={videoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-700 underline"
+                            >
+                              Open Video
+                            </a>
+                          ) : (
+                            <span className="text-slate-500">Not uploaded yet</span>
                           )}
                         </p>
-                      )}
-                      {app.degreeFileName && (
-                        <p>
-                          <span className="font-semibold text-slate-900">Degree:</span>{' '}
-                          {app.degreeFileData ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => openStoredDocument(app.degreeFileData)}
-                                className="text-blue-700 underline"
-                              >
-                                View {app.degreeFileName}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => downloadStoredDocument(app.degreeFileData, app.degreeFileName)}
-                                className="ml-3 text-blue-700 underline"
-                              >
-                                Download
-                              </button>
-                            </>
-                          ) : (
-                            app.degreeFileName
-                          )}
-                        </p>
-                      )}
-                    </div>
-                    <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Test Result</p>
-                      <p className="mt-2">
-                        Score: <span className="font-semibold text-slate-900">{app.testResult?.score ?? 0}</span> /
-                        <span className="ml-1">{app.testResult?.totalQuestions ?? 0}</span>
-                      </p>
-                      <p className="text-xs text-slate-500 mt-1">Answered: {app.testResult?.answeredCount ?? 0}</p>
-                    </div>
-                  </div>
+                      </div>
 
-                  {app.status === 'pending' && (
-                    <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                      <button
-                        onClick={() => handleApprove(app)}
-                        className="px-5 py-2 rounded-lg bg-blue-900 text-white text-sm font-semibold hover:bg-blue-700"
-                      >
-                        Approve & Generate Password
-                      </button>
-                      <button
-                        onClick={() => handleDeny(app)}
-                        className="px-5 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-semibold hover:bg-slate-50"
-                      >
-                        Deny
-                      </button>
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                          Test Result
+                        </p>
+                        <p className="mt-2">
+                          Score:{' '}
+                          <span className="font-semibold text-slate-900">
+                            {app.score}%
+                          </span>
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Review Status: {app.reviewStatus}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))
+
+                    {status === 'pending' && (
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                        <button
+                          onClick={() =>
+                            openReviewModal(app.user.id, 'APPROVE', app.user.name)
+                          }
+                          className="rounded-lg bg-blue-900 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-400"
+                          disabled={isReviewing}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() =>
+                            openReviewModal(app.user.id, 'REJECT', app.user.name)
+                          }
+                          className="rounded-lg border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400"
+                          disabled={isReviewing}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </main>
       </div>
+
+      {reviewModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+              {reviewModal.decision === 'APPROVE'
+                ? 'Approve Application'
+                : 'Reject Application'}
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">
+              {reviewModal.applicantName}
+            </h3>
+            <p className="mt-2 text-sm text-slate-600">
+              {reviewModal.decision === 'APPROVE'
+                ? 'Add an optional approval note for this candidate.'
+                : 'Add an optional rejection reason for this candidate.'}
+            </p>
+
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Note
+              </label>
+              <textarea
+                value={reviewNote}
+                onChange={(e) => setReviewNote(e.target.value)}
+                placeholder={
+                  reviewModal.decision === 'APPROVE'
+                    ? 'Optional note visible in admin review history'
+                    : 'Optional reason for rejection'
+                }
+                className="min-h-[120px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeReviewModal}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
+                disabled={isReviewing}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleReviewConfirm()}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400 ${
+                  reviewModal.decision === 'APPROVE'
+                    ? 'bg-blue-900 hover:bg-blue-700'
+                    : 'bg-rose-700 hover:bg-rose-600'
+                }`}
+                disabled={isReviewing}
+              >
+                {isReviewing
+                  ? 'Saving...'
+                  : reviewModal.decision === 'APPROVE'
+                    ? 'Confirm Approval'
+                    : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

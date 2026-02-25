@@ -5,6 +5,8 @@ import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
+import { useRegisterForTestMutation } from '@/features/LeaderApplicationApi';
+import type { LeaderApplySelection } from '@/types/leaderApplication';
 
 type LeaderFormState = {
   fullName: string;
@@ -21,10 +23,16 @@ const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 export default function LeaderApplyFormPage() {
   const navigate = useNavigate();
-  const selectedCategory = useMemo(
-    () => sessionStorage.getItem('leaderApplyCategory') ?? '',
-    []
-  );
+  const [registerForTest, { isLoading }] = useRegisterForTestMutation();
+  const selection = useMemo<LeaderApplySelection | null>(() => {
+    const raw = sessionStorage.getItem('leaderApplySelection');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as LeaderApplySelection;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const [form, setForm] = useState<LeaderFormState>({
     fullName: '',
@@ -44,63 +52,60 @@ export default function LeaderApplyFormPage() {
     }));
   };
 
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.onerror = () => reject(new Error('Failed to read file.'));
-      reader.readAsDataURL(file);
-    });
+  const getErrorMessage = (err: unknown) => {
+    const response = err as { data?: { message?: string | string[] } };
+    const message = response?.data?.message;
+    if (Array.isArray(message)) return message[0] ?? 'Unable to submit your application.';
+    if (typeof message === 'string' && message.trim()) return message;
+    return 'Unable to submit your application. Please review your details and try again.';
+  };
 
   const handleNext = async () => {
     setError('');
-    if (!selectedCategory) {
+    if (!selection?.categoryId) {
       setError('Please choose a club category first.');
       return;
     }
-    if (!form.fullName || !form.email || !form.phone || !form.experience || !form.cvFile || !form.degreeFile) {
-      setError('Please complete all required fields and uploads.');
+    if (!form.fullName || !form.email || !form.phone || !form.experience || !form.bio || !form.cvFile) {
+      setError('Please complete all required fields and upload your CV.');
       return;
     }
     if (form.cvFile.size > MAX_UPLOAD_SIZE_BYTES) {
       setError(`CV must be ${MAX_UPLOAD_SIZE_MB}MB or smaller.`);
       return;
     }
-    if (form.degreeFile.size > MAX_UPLOAD_SIZE_BYTES) {
+    if (form.degreeFile && form.degreeFile.size > MAX_UPLOAD_SIZE_BYTES) {
       setError(`Degree file must be ${MAX_UPLOAD_SIZE_MB}MB or smaller.`);
       return;
     }
 
     sessionStorage.removeItem('leaderApplyResult');
-
-    let cvFileData = '';
-    let degreeFileData = '';
     try {
-      cvFileData = await readFileAsDataUrl(form.cvFile);
-      degreeFileData = await readFileAsDataUrl(form.degreeFile);
-    } catch {
-      setError('Unable to read uploaded files. Please re-upload and try again.');
+      const normalizedEmail = form.email.trim().toLowerCase();
+      const mergedBio = `Experience: ${form.experience.trim()}\n\n${form.bio.trim()}`;
+      const response = await registerForTest({
+        fullName: form.fullName.trim(),
+        email: normalizedEmail,
+        phone: form.phone.trim(),
+        bio: mergedBio,
+        cv: form.cvFile,
+        degree: form.degreeFile,
+      }).unwrap();
+
+      sessionStorage.setItem(
+        'leaderApplySession',
+        JSON.stringify({
+          categoryId: selection.categoryId,
+          categoryName: selection.categoryName,
+          userId: response.userId,
+          email: response.email,
+        }),
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
       return;
     }
 
-    const payload = {
-      category: selectedCategory,
-      fullName: form.fullName,
-      email: form.email,
-      phone: form.phone,
-      experience: form.experience,
-      bio: form.bio,
-      cvFileName: form.cvFile?.name ?? '',
-      cvFileData,
-      degreeFileName: form.degreeFile?.name ?? '',
-      degreeFileData
-    };
-    try {
-      sessionStorage.setItem('leaderApplyForm', JSON.stringify(payload));
-    } catch {
-      setError('Uploaded files are too large for browser storage. Please upload smaller files and try again.');
-      return;
-    }
     navigate('/leader/apply/protocol');
   };
 
@@ -131,7 +136,7 @@ export default function LeaderApplyFormPage() {
               <div>
                 <h2 className="text-xl font-bold text-blue-900">Your Information</h2>
                 <p className="text-sm text-slate-600 mt-1">
-                  Applying to lead: <span className="font-semibold text-slate-900">{selectedCategory || 'Not selected'}</span>
+                  Applying to lead: <span className="font-semibold text-slate-900">{selection?.categoryName || 'Not selected'}</span>
                 </p>
               </div>
               <Link
@@ -230,9 +235,10 @@ export default function LeaderApplyFormPage() {
             <div className="mt-8 flex justify-end">
               <button
                 onClick={handleNext}
+                disabled={isLoading}
                 className="px-8 py-3 bg-blue-900 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Continue to Protocol
+                {isLoading ? 'Submitting...' : 'Continue to Protocol'}
               </button>
             </div>
           </div>

@@ -4,30 +4,30 @@ import {
   Bolt,
   Code2,
   Crown,
-  MessagesSquare,
   MonitorPlay,
   Search,
   Sparkles,
-  Users,
   Menu,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentSidebar from '@/components/student/StudentSidebar';
-import { clubs as allClubs } from '@/data/clubs';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
 import MobileSidebarDrawer from '@/components/layout/MobileSidebarDrawer';
+import { useGetClubByIdQuery } from '@/features/ClubsApi';
+import { useGetUserMembershipsQuery } from '@/features/UsersApi';
+import {
+  type CollaborationTask,
+  type CollaborationTaskStatus,
+  useCreateCodeSubmissionMutation,
+  useCreateMessageMutation,
+  useCreateTaskMutation,
+  useGetRoomByClubQuery,
+  useUpdateTaskMutation,
+} from '@/features/CollaborationApi';
 
 const defaultMembers = [
-  { name: 'Amina K.', role: 'Club Lead', status: 'online' },
-  { name: 'Samir L.', role: 'Mentor', status: 'online' },
-  { name: 'Grace P.', role: 'Contributor', status: 'offline' },
-  { name: 'Diego M.', role: 'Contributor', status: 'online' },
-];
-
-const tasks = [
-  { title: 'Update hero animation', due: 'Today', status: 'In progress' },
-  { title: 'Review component library', due: 'Tomorrow', status: 'Review' },
-  { title: 'Prepare demo notes', due: 'Friday', status: 'Todo' },
+  { name: 'Club Lead', role: 'CREATOR', status: 'online' as const },
+  { name: 'Member', role: 'MEMBER', status: 'offline' as const },
 ];
 
 const starterCode = `function greeting(name) {
@@ -48,6 +48,25 @@ const codingCategories = [
   'devops engineering',
 ];
 
+const columnToStatus: Record<string, CollaborationTaskStatus> = {
+  Todo: 'todo',
+  'In progress': 'in_progress',
+  Review: 'review',
+  Done: 'done',
+};
+
+const nextStatus: Record<CollaborationTaskStatus, CollaborationTaskStatus> = {
+  todo: 'in_progress',
+  in_progress: 'review',
+  review: 'done',
+  done: 'done',
+};
+
+const getDueLabel = (date?: string | null) => {
+  if (!date) return 'No due date';
+  return new Date(date).toLocaleDateString();
+};
+
 export default function StudentCollaborationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -55,58 +74,101 @@ export default function StudentCollaborationPage() {
   const [code, setCode] = useState(starterCode);
   const [output, setOutput] = useState('Run the code to see output.');
   const [chatInput, setChatInput] = useState('');
-  const [messages, setMessages] = useState([
-    { name: 'Amina', text: 'Let’s keep updates short and actionable.' },
-    { name: 'Alex', text: 'I can handle the UI polish today.' },
-  ]);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [activePeopleTab, setActivePeopleTab] = useState<'chat' | 'members'>('chat');
   const [submittedNote, setSubmittedNote] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const clubId = Number(id);
-  const mergedClubs = useMemo(() => {
+  const authUser = useMemo(() => {
     try {
-      const stored = localStorage.getItem('leaderCreatedClubs');
-      const leaderClubs = stored ? JSON.parse(stored) : [];
-      return [...leaderClubs, ...allClubs];
+      const raw = localStorage.getItem('authUser');
+      return raw
+        ? (JSON.parse(raw) as {
+            id?: string;
+            userId?: string;
+            sub?: string;
+            email?: string;
+          })
+        : {};
     } catch {
-      return allClubs;
+      return {};
     }
   }, []);
+  const tokenUserId = useMemo(() => {
+    try {
+      const token = localStorage.getItem('authAccessToken');
+      if (!token) return '';
+      const payload = token.split('.')[1];
+      if (!payload) return '';
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(normalized)) as { sub?: string };
+      return decoded.sub ?? '';
+    } catch {
+      return '';
+    }
+  }, []);
+  const resolvedUserId = authUser.id || authUser.userId || authUser.sub || tokenUserId || '';
+  const tokenExists = Boolean(localStorage.getItem('authAccessToken'));
 
-  const normalizedClubs = useMemo(
-    () =>
-      mergedClubs.map((club) => ({
-        ...club,
-        tags: club.tags ?? (club.category ? [club.category, 'Community', 'Projects'] : []),
-        projectList: club.projectList ?? [],
-        stats: club.stats ?? { joinedMembers: 0, projects: club.projectsCount ?? 0, modules: club.modulesCount ?? 0 },
-        projectsCount: club.projectsCount ?? 0,
-        modulesCount: club.modulesCount ?? 0,
-      })),
-    [mergedClubs]
-  );
+  const clubId = String(id ?? '');
+  const { data: club } = useGetClubByIdQuery(clubId, { skip: !clubId });
+  const {
+    data: memberships = [],
+    isLoading: membershipsLoading,
+    isFetching: membershipsFetching,
+  } = useGetUserMembershipsQuery(resolvedUserId, {
+    skip: !resolvedUserId,
+  });
+  const {
+    data: room,
+    isLoading: roomLoading,
+    isFetching: roomFetching,
+  } = useGetRoomByClubQuery(clubId, {
+    skip: !clubId || !tokenExists,
+    pollingInterval: 15000,
+  });
 
-  const club = normalizedClubs.find((item) => item.id === clubId);
-
-  const joinedClubIds = useMemo(() => {
+  const localJoinedClubIds = useMemo(() => {
     try {
       const raw = localStorage.getItem('studentJoinedClubs');
-      return raw ? (JSON.parse(raw) as number[]) : [];
+      return raw ? (JSON.parse(raw) as Array<string | number>).map(String) : [];
     } catch {
       return [];
     }
   }, []);
 
-  const isJoined = joinedClubIds.includes(clubId);
+  const [createMessage, { isLoading: postingMessage }] = useCreateMessageMutation();
+  const [createTask, { isLoading: creatingTask }] = useCreateTaskMutation();
+  const [updateTask] = useUpdateTaskMutation();
+  const [createCodeSubmission, { isLoading: submittingCode }] = useCreateCodeSubmissionMutation();
+
+  const isJoined = useMemo(() => {
+    if (!clubId) return false;
+    const activeMembership = memberships.some(
+      (membership) =>
+        String(membership.clubId) === clubId && membership.status === 'active',
+    );
+    const isClubOwner = club?.creatorId && resolvedUserId && club.creatorId === resolvedUserId;
+    const joinedLocally = localJoinedClubIds.includes(clubId);
+    const hasRoomAccess = Boolean(room);
+    return activeMembership || Boolean(isClubOwner) || joinedLocally || hasRoomAccess;
+  }, [club?.creatorId, clubId, localJoinedClubIds, memberships, resolvedUserId, room]);
+
   const showWorkspace = useMemo(() => {
     if (!club) return false;
-    const tagMatch = club.tags.some((tag) => codingTags.includes(tag));
-    const categoryMatch = club.category
-      ? codingCategories.includes(String(club.category).toLowerCase())
+    const categoryName = typeof club.category === 'string' ? club.category : club.category?.name;
+    const tagMatch = codingTags.some((tag) =>
+      club.name.toLowerCase().includes(tag.toLowerCase())
+    );
+    const categoryMatch = categoryName
+      ? codingCategories.includes(String(categoryName).toLowerCase())
       : false;
     return tagMatch || categoryMatch;
   }, [club]);
+
+  const tasks = room?.tasks ?? [];
+  const messages = room?.messages ?? [];
+  const members = room?.members ?? [];
 
   const runCode = () => {
     if (selectedLanguage !== 'JavaScript') {
@@ -121,9 +183,7 @@ export default function StudentCollaborationPage() {
         logs.push(args.map((arg) => String(arg)).join(' '));
       };
       const result = new Function(code)();
-      if (result !== undefined) {
-        logs.push(String(result));
-      }
+      if (result !== undefined) logs.push(String(result));
       setOutput(logs.length ? logs.join('\n') : 'Program finished with no output.');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -133,38 +193,44 @@ export default function StudentCollaborationPage() {
     }
   };
 
-  const sendMessage = () => {
-    if (!chatInput.trim()) return;
-    setMessages((prev) => [...prev, { name: 'You', text: chatInput.trim() }]);
+  const sendMessage = async () => {
+    const content = chatInput.trim();
+    if (!content || !clubId) return;
+    await createMessage({ clubId, content }).unwrap();
     setChatInput('');
   };
 
-  const handleSubmitCode = () => {
-    if (!club) return;
-    const entry = {
-      clubId: club.id,
+  const handleCreateTask = async () => {
+    const title = newTaskTitle.trim();
+    if (!title || !clubId) return;
+    await createTask({ clubId, title, status: 'todo' }).unwrap();
+    setNewTaskTitle('');
+  };
+
+  const advanceTask = async (task: CollaborationTask) => {
+    if (!clubId || task.status === 'done') return;
+    await updateTask({ clubId, taskId: task.id, status: nextStatus[task.status] }).unwrap();
+  };
+
+  const handleSubmitCode = async () => {
+    if (!clubId) return;
+    await createCodeSubmission({
+      clubId,
+      language: selectedLanguage,
       code,
-      note: submittedNote.trim(),
-      submittedAt: new Date().toISOString(),
-    };
-    try {
-      const raw = localStorage.getItem('collabCodeSubmissions');
-      const existing = raw ? (JSON.parse(raw) as typeof entry[]) : [];
-      localStorage.setItem('collabCodeSubmissions', JSON.stringify([entry, ...existing]));
-    } catch {
-      localStorage.setItem('collabCodeSubmissions', JSON.stringify([entry]));
-    }
+      note: submittedNote.trim() || undefined,
+    }).unwrap();
     setSubmittedNote('');
   };
 
   if (!club) {
     return (
       <div className="min-h-screen w-full bg-slate-100">
-      <div className="flex min-h-screen">
-        <StudentSidebar />
-        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
-          <StudentSidebar variant="mobile" />
-        </MobileSidebarDrawer>
+        <div className="flex min-h-screen">
+          <StudentSidebar />
+          <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+            <StudentSidebar variant="mobile" />
+          </MobileSidebarDrawer>
           <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
             <div className="mb-6 flex items-center">
               <button
@@ -177,7 +243,7 @@ export default function StudentCollaborationPage() {
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <h1 className="text-2xl font-semibold text-slate-900">Club not found</h1>
               <p className="text-sm text-slate-600 mt-2">
-                Pick a club from your student dashboard to collaborate.
+                Pick a valid club from your student dashboard to collaborate.
               </p>
               <button
                 onClick={() => navigate('/student/clubs')}
@@ -192,14 +258,32 @@ export default function StudentCollaborationPage() {
     );
   }
 
+  const accessCheckLoading =
+    (resolvedUserId && (membershipsLoading || membershipsFetching)) ||
+    (tokenExists && (roomLoading || roomFetching));
+  if (accessCheckLoading) {
+    return (
+      <div className="min-h-screen w-full bg-slate-100">
+        <div className="flex min-h-screen">
+          <StudentSidebar />
+          <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
+              <h1 className="text-2xl font-semibold text-slate-900">Loading collaboration room...</h1>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   if (!isJoined) {
     return (
       <div className="min-h-screen w-full bg-slate-100">
-      <div className="flex min-h-screen">
-        <StudentSidebar />
-        <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
-          <StudentSidebar variant="mobile" />
-        </MobileSidebarDrawer>
+        <div className="flex min-h-screen">
+          <StudentSidebar />
+          <MobileSidebarDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Student Menu">
+            <StudentSidebar variant="mobile" />
+          </MobileSidebarDrawer>
           <main className="flex-1 px-5 py-12 lg:px-8 lg:ml-64">
             <div className="mb-6 flex items-center">
               <button
@@ -261,21 +345,7 @@ export default function StudentCollaborationPage() {
               </div>
             </div>
             <div className="rounded-2xl bg-white border border-slate-200 px-3 py-2 text-xs">
-              <p className="text-slate-700 font-medium">
-                {(() => {
-                  try {
-                    const raw = localStorage.getItem('authUser');
-                    if (!raw) return 'Student';
-                    const auth = JSON.parse(raw) as { email?: string };
-                    const membersRaw = localStorage.getItem('studentMembers');
-                    const members = membersRaw ? (JSON.parse(membersRaw) as { email: string; fullName: string }[]) : [];
-                    const profile = members.find((member) => member.email === auth.email);
-                    return profile?.fullName || auth.email?.split('@')[0] || 'Student';
-                  } catch {
-                    return 'Student';
-                  }
-                })()}
-              </p>
+              <p className="text-slate-700 font-medium">{authUser.email?.split('@')[0] || 'Student'}</p>
               <p className="text-slate-400">Member</p>
             </div>
           </div>
@@ -294,7 +364,7 @@ export default function StudentCollaborationPage() {
                 </div>
                 <div className="flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700">
                   <Bolt className="h-4 w-4" />
-                  6 updates today
+                  {room?.codeSubmissions.length ?? 0} code updates
                 </div>
               </div>
             </div>
@@ -307,20 +377,41 @@ export default function StudentCollaborationPage() {
                   <h2 className="text-lg font-semibold text-slate-900">Sprint Board</h2>
                   <Sparkles className="h-4 w-4 text-blue-600" />
                 </div>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {['Todo', 'In progress', 'Review'].map((column) => (
+
+                <div className="mt-4 flex gap-2">
+                  <input
+                    value={newTaskTitle}
+                    onChange={(event) => setNewTaskTitle(event.target.value)}
+                    placeholder="Add a task..."
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <button
+                    onClick={handleCreateTask}
+                    disabled={creatingTask}
+                    className="rounded-xl bg-blue-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {Object.entries(columnToStatus).map(([column, status]) => (
                     <div key={column} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-600 uppercase tracking-[0.2em]">
                         {column}
                       </p>
                       <div className="mt-3 space-y-3">
                         {tasks
-                          .filter((task) => task.status === column)
+                          .filter((task) => task.status === status)
                           .map((task) => (
-                            <div key={task.title} className="rounded-2xl bg-white p-3 shadow-sm border border-slate-200">
+                            <button
+                              key={task.id}
+                              onClick={() => advanceTask(task)}
+                              className="w-full text-left rounded-2xl bg-white p-3 shadow-sm border border-slate-200 hover:border-blue-200"
+                            >
                               <p className="text-sm font-semibold text-slate-900">{task.title}</p>
-                              <p className="text-xs text-slate-500 mt-1">Due {task.due}</p>
-                            </div>
+                              <p className="text-xs text-slate-500 mt-1">Due {getDueLabel(task.dueDate)}</p>
+                            </button>
                           ))}
                       </div>
                     </div>
@@ -382,7 +473,8 @@ export default function StudentCollaborationPage() {
                     </button>
                     <button
                       onClick={handleSubmitCode}
-                      className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+                      disabled={submittingCode}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
                     >
                       Submit Code
                     </button>
@@ -418,11 +510,14 @@ export default function StudentCollaborationPage() {
                   Collaboration Pulse
                 </div>
                 <p className="mt-3 text-sm font-semibold">
-                  3 members are active now. Jump into the live chat and claim a task.
+                  {members.length} members in this room. Keep updates actionable.
                 </p>
-                <button className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white hover:bg-white/25">
+                <button
+                  onClick={() => setActivePeopleTab('chat')}
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-semibold text-white hover:bg-white/25"
+                >
                   <BadgeCheck className="h-4 w-4" />
-                  Claim a task
+                  Open Chat
                 </button>
               </div>
 
@@ -452,10 +547,13 @@ export default function StudentCollaborationPage() {
                 {activePeopleTab === 'chat' ? (
                   <>
                     <div className="mt-4 space-y-3 max-h-64 overflow-y-auto pr-1">
-                      {messages.map((message, index) => (
-                        <div key={`${message.name}-${index}`} className="rounded-2xl bg-slate-50 p-3">
-                          <p className="text-xs font-semibold text-slate-900">{message.name}</p>
-                          <p className="text-xs text-slate-600 mt-1">{message.text}</p>
+                      {(roomLoading || roomFetching) && messages.length === 0 && (
+                        <div className="rounded-2xl bg-slate-50 p-3 text-xs text-slate-500">Loading messages...</div>
+                      )}
+                      {messages.map((message) => (
+                        <div key={message.id} className="rounded-2xl bg-slate-50 p-3">
+                          <p className="text-xs font-semibold text-slate-900">{message.user.name}</p>
+                          <p className="text-xs text-slate-600 mt-1">{message.content}</p>
                         </div>
                       ))}
                     </div>
@@ -468,7 +566,8 @@ export default function StudentCollaborationPage() {
                       />
                       <button
                         onClick={sendMessage}
-                        className="w-full rounded-lg bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                        disabled={postingMessage}
+                        className="w-full rounded-lg bg-blue-900 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                       >
                         Send Message
                       </button>
@@ -476,9 +575,9 @@ export default function StudentCollaborationPage() {
                   </>
                 ) : (
                   <div className="mt-4 space-y-3">
-                    {defaultMembers.map((member) => (
+                    {(members.length > 0 ? members : defaultMembers).map((member) => (
                       <div
-                        key={member.name}
+                        key={'userId' in member ? member.userId : member.name}
                         className="flex items-center justify-between rounded-2xl border border-slate-200 p-3"
                       >
                         <div>
@@ -487,10 +586,10 @@ export default function StudentCollaborationPage() {
                         </div>
                         <span
                           className={`text-[10px] font-semibold uppercase ${
-                            member.status === 'online' ? 'text-emerald-600' : 'text-slate-400'
+                            ('email' in member && member.email ? 'text-emerald-600' : 'text-slate-400')
                           }`}
                         >
-                          {member.status}
+                          {'email' in member && member.email ? 'online' : member.status}
                         </span>
                       </div>
                     ))}

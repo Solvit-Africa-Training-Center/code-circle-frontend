@@ -4,6 +4,8 @@ import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
 import CodeCircleLogo from '@/components/common/CodeCircleLogo';
+import { useLoginMutation } from '@/features/AuthApi';
+import type { AppRole } from '@/types/user';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -11,100 +13,184 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const studentDefaultPassword = 'member123';
-  const adminDefault = { email: 'admin@codecircle.com', password: 'admin123' };
+  const [login, { isLoading }] = useLoginMutation();
 
-  const handleSignIn = () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (normalizedEmail === adminDefault.email && password === adminDefault.password) {
-      setError('');
-      localStorage.setItem('authUser', JSON.stringify({ email: normalizedEmail, role: 'admin' }));
-      const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(redirectTo || '/admin/dashboard');
+  const decodeJwtPayload = (token: string) => {
+    const payload = token.split('.')[1];
+    if (!payload) throw new Error('Invalid token');
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = atob(normalized);
+    return JSON.parse(decoded) as {
+      sub?: string;
+      email?: string;
+      roles?: Array<string | { name?: string }>;
+    };
+  };
+
+  const normalizeRoleNames = (
+    roles: Array<string | { name?: string }> = [],
+  ): string[] => {
+    return roles
+      .map((role) => {
+        if (typeof role === 'string') return role;
+        return role?.name ?? '';
+      })
+      .filter(Boolean)
+      .map((role) => role.toUpperCase());
+  };
+
+  const toAppRole = (rawRoles: Array<string | { name?: string }> = []): AppRole | null => {
+    const roles = normalizeRoleNames(rawRoles);
+    if (roles.includes('ADMIN') || roles.includes('ROLE_ADMIN')) return 'ADMIN';
+    if (
+      roles.includes('CLUB_LEADER') ||
+      roles.includes('ROLE_CLUB_LEADER') ||
+      roles.includes('CREATOR') ||
+      roles.includes('ROLE_CREATOR')
+    ) {
+      return 'CLUB_LEADER';
+    }
+    if (roles.includes('MEMBER')) return 'MEMBER';
+    return null;
+  };
+
+  const redirectForRole = (role: AppRole) => {
+    const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+    if (redirectTo) {
+      navigate(redirectTo);
       return;
     }
-    const tempLeaders = (() => {
-      try {
-        const raw = localStorage.getItem('leaderTempCredentials');
-        return raw
-          ? (JSON.parse(raw) as { email: string; password: string; expiresAt: string; fullName?: string }[])
-          : [];
-      } catch {
-        return [];
+    if (role === 'ADMIN') {
+      navigate('/admin/dashboard');
+      return;
+    }
+    if (role === 'CLUB_LEADER') {
+      navigate('/leader/dashboard');
+      return;
+    }
+    navigate('/student/dashboard');
+  };
+
+  const getErrorMessage = (err: unknown) => {
+    const apiMessage = (err as { data?: { message?: string } })?.data?.message;
+    if (typeof apiMessage === 'string' && apiMessage.trim()) {
+      return apiMessage;
+    }
+    return 'Login failed. Please check your email and password.';
+  };
+
+  const completePendingClubJoin = (email: string) => {
+    try {
+      const pendingRaw = sessionStorage.getItem('pendingClubJoin');
+      if (!pendingRaw) return false;
+      const pending = JSON.parse(pendingRaw) as { clubId?: string };
+      const clubId = String(pending?.clubId ?? '');
+      if (!clubId) {
+        sessionStorage.removeItem('pendingClubJoin');
+        return false;
       }
-    })();
-    const tempMatch = tempLeaders.find(
-      (leader) => leader.email?.toLowerCase() === normalizedEmail && leader.password === password
-    );
-    if (tempMatch) {
-      const isExpired = Date.now() > new Date(tempMatch.expiresAt).getTime();
-      if (isExpired) {
-        const remaining = tempLeaders.filter((leader) => leader.email?.toLowerCase() !== normalizedEmail);
-        localStorage.setItem('leaderTempCredentials', JSON.stringify(remaining));
-        setError('Temporary password expired. Please contact admin for a new one.');
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const studentName = normalizedEmail.split('@')[0] || 'Member';
+
+      const joinedRaw = localStorage.getItem('studentJoinedClubs');
+      const joinedIds = joinedRaw ? (JSON.parse(joinedRaw) as Array<string | number>).map(String) : [];
+      if (!joinedIds.includes(clubId)) {
+        localStorage.setItem('studentJoinedClubs', JSON.stringify([...joinedIds, clubId]));
+      }
+
+      const membersRaw = localStorage.getItem('clubMembers');
+      const membersByClub = membersRaw
+        ? (JSON.parse(membersRaw) as Record<string, { email: string; fullName: string }[]>)
+        : {};
+      const clubMembers = membersByClub[clubId] ?? [];
+      if (!clubMembers.some((member) => member.email === normalizedEmail)) {
+        membersByClub[clubId] = [...clubMembers, { email: normalizedEmail, fullName: studentName }];
+        localStorage.setItem('clubMembers', JSON.stringify(membersByClub));
+      }
+
+      const profilesRaw = localStorage.getItem('studentMembers');
+      const profiles = profilesRaw
+        ? (JSON.parse(profilesRaw) as { email: string; fullName: string }[])
+        : [];
+      if (!profiles.some((profile) => profile.email === normalizedEmail)) {
+        localStorage.setItem(
+          'studentMembers',
+          JSON.stringify([...profiles, { email: normalizedEmail, fullName: studentName }]),
+        );
+      }
+
+      const createdRaw = localStorage.getItem('leaderCreatedClubs');
+      if (createdRaw) {
+        const created = JSON.parse(createdRaw) as Array<{
+          id: number | string;
+          stats?: { joinedMembers: number };
+        }>;
+        const nextClubs = created.map((club) => {
+          if (String(club.id) !== clubId) return club;
+          return {
+            ...club,
+            stats: { joinedMembers: (membersByClub[clubId] || []).length },
+          };
+        });
+        localStorage.setItem('leaderCreatedClubs', JSON.stringify(nextClubs));
+      }
+
+      sessionStorage.removeItem('pendingClubJoin');
+      return true;
+    } catch {
+      sessionStorage.removeItem('pendingClubJoin');
+      return false;
+    }
+  };
+
+  const handleSignIn = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setError('Email and password are required.');
+      return;
+    }
+
+    try {
+      setError('');
+      const result = await login({
+        email: normalizedEmail,
+        password,
+      }).unwrap();
+
+      const payload = decodeJwtPayload(result.accessToken);
+      const role = toAppRole(payload.roles);
+      const userEmail = payload.email ?? normalizedEmail;
+      const userId = payload.sub;
+
+      if (!role || !userId) {
+        setError('Authenticated but missing required user role/email in token.');
         return;
       }
-      setError('');
-      localStorage.setItem(
-        'authUser',
-        JSON.stringify({
-          email: normalizedEmail,
-          role: 'leader',
-          mustChange: true,
-          fullName: tempMatch.fullName
-        })
-      );
-      navigate('/leader/change-password');
-      return;
-    }
 
-    const approvedLeaders = (() => {
-      try {
-        const raw = localStorage.getItem('leaderCredentials');
-        return raw ? (JSON.parse(raw) as { email: string; password: string; fullName?: string }[]) : [];
-      } catch {
-        return [];
-      }
-    })();
-    const matchedLeader = approvedLeaders.find(
-      (leader) => leader.email?.toLowerCase() === normalizedEmail && leader.password === password
-    );
-    if (matchedLeader) {
-      setError('');
+      localStorage.setItem('authAccessToken', result.accessToken);
+      localStorage.setItem('authRefreshToken', result.refreshToken);
       localStorage.setItem(
         'authUser',
         JSON.stringify({
-          email: normalizedEmail,
-          role: 'leader',
-          mustChange: false,
-          fullName: matchedLeader.fullName
-        })
+          id: userId,
+          email: userEmail,
+          role,
+        }),
       );
-      const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(redirectTo || '/leader/dashboard');
-      return;
-    }
-    const studentMembers = (() => {
-      try {
-        const raw = localStorage.getItem('studentMembers');
-        return raw ? (JSON.parse(raw) as { email: string }[]) : [];
-      } catch {
-        return [];
+
+      if (role === 'MEMBER') {
+        const joinedFromPending = completePendingClubJoin(userEmail);
+        if (joinedFromPending) {
+          navigate('/student/clubs');
+          return;
+        }
       }
-    })();
-    const isStudent = studentMembers.some((member) => member.email === normalizedEmail);
-    if (isStudent && password === studentDefaultPassword) {
-      setError('');
-      localStorage.setItem('authUser', JSON.stringify({ email: normalizedEmail, role: 'student' }));
-      const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(redirectTo || '/student/dashboard');
-      return;
+
+      redirectForRole(role);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
-    setError(
-      `Invalid credentials. Admin uses admin@codecircle.com / admin123. ` +
-        `Leaders must use admin-approved credentials. ` +
-        `Member must use the email submitted in the club member form with password ${studentDefaultPassword}.`
-    );
   };
 
   return (
@@ -207,11 +293,12 @@ export default function LoginPage() {
             )}
 
             <button
-              className="mt-6 w-full rounded-lg bg-blue-900 text-white font-semibold py-2.5 hover:bg-blue-700 transition-colors"
+              className="mt-6 w-full rounded-lg bg-blue-900 text-white font-semibold py-2.5 hover:bg-blue-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
               type="button"
               onClick={handleSignIn}
+              disabled={isLoading}
             >
-              Sign In
+              {isLoading ? 'Signing In...' : 'Sign In'}
             </button>
 
             <button

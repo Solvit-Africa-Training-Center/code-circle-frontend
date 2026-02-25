@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import bg1 from '@/assets/home_11.jpeg';
 import bg2 from '@/assets/home_1111.jpeg';
 import bg3 from '@/assets/home_11111.jpeg';
-import { clubs } from '@/data/clubs';
 import {
   getCameraStream,
   getScreenStream,
@@ -14,6 +13,8 @@ import {
   stopCameraStream as stopPersistedCamera,
   stopScreenStream as stopPersistedScreen
 } from '@/utils/testProctoring';
+import { useGetClubByIdQuery } from '@/features/ClubsApi';
+import MemberPageLayout from '@/components/student/MemberPageLayout';
 
 export default function ClubTestPage() {
   const { id } = useParams();
@@ -24,11 +25,7 @@ export default function ClubTestPage() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(() => getScreenStream());
   const [mediaError, setMediaError] = useState('');
 
-  const clubId = id ? Number(id) : null;
-  const club = useMemo(() => {
-    if (!clubId) return clubs[0];
-    return clubs.find((item) => item.id === clubId) ?? clubs[0];
-  }, [clubId]);
+  const { data: club } = useGetClubByIdQuery(id ?? '', { skip: !id });
 
   const codingCategories = new Set([
     'Web Development',
@@ -38,7 +35,8 @@ export default function ClubTestPage() {
     'Data Engineering',
     'Artificial Intelligence'
   ]);
-  const isCodingClub = codingCategories.has(club.category);
+  const categoryName = club?.category?.name ?? '';
+  const isCodingClub = codingCategories.has(categoryName);
 
   const mcqCount = 6;
   const codingCount = isCodingClub ? 2 : 0;
@@ -47,7 +45,7 @@ export default function ClubTestPage() {
 
   const test = {
     id: id || '1',
-    name: `${club.name} - Entry Test`,
+    name: `${club?.name ?? 'Club'} - Entry Test`,
     duration: `${durationMinutes} Minutes`,
     points: `${totalPoints} Points`,
     guidelines: [
@@ -119,8 +117,9 @@ export default function ClubTestPage() {
   };
 
   return (
-    <div className="w-full overflow-x-hidden bg-white min-h-screen flex flex-col">
-      <Header />
+    <MemberPageLayout>
+      <div className="w-full overflow-x-hidden bg-white min-h-screen flex flex-col">
+        <Header />
 
       {/* Page Header */}
       <div className="relative w-full h-[250px] md:h-[280px] flex items-start justify-center overflow-hidden">
@@ -285,7 +284,8 @@ export default function ClubTestPage() {
         </div>
       </div>
 
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </MemberPageLayout>
   );
 }
