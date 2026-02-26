@@ -73,9 +73,25 @@ export default function AdminApplicationsPage() {
   });
   const [reviewNote, setReviewNote] = useState('');
 
-  const pendingQuery = useGetAdminLeaderApplicationsQuery('PENDING');
-  const approvedQuery = useGetAdminLeaderApplicationsQuery('APPROVED');
-  const rejectedQuery = useGetAdminLeaderApplicationsQuery('REJECTED');
+  const adminApplicationsQueryOptions = {
+    pollingInterval: 10000,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMountOrArgChange: true,
+  } as const;
+
+  const pendingQuery = useGetAdminLeaderApplicationsQuery(
+    'PENDING',
+    adminApplicationsQueryOptions,
+  );
+  const approvedQuery = useGetAdminLeaderApplicationsQuery(
+    'APPROVED',
+    adminApplicationsQueryOptions,
+  );
+  const rejectedQuery = useGetAdminLeaderApplicationsQuery(
+    'REJECTED',
+    adminApplicationsQueryOptions,
+  );
   const [reviewLeaderApplication, { isLoading: isReviewing }] =
     useReviewLeaderApplicationMutation();
 
@@ -365,6 +381,8 @@ export default function AdminApplicationsPage() {
                 const cvUrl = normalizeExternalUrl(app.user.cv);
                 const degreeUrl = normalizeExternalUrl(app.user.degree);
                 const videoUrl = normalizeExternalUrl(app.proctoringVideoUrl);
+                const rawVideoUrl = app.proctoringVideoUrl?.trim();
+                const resolvedVideoUrl = videoUrl ?? rawVideoUrl ?? null;
                 const passStatus = app.passed ? 'Passed test' : 'Failed test';
 
                 return (
@@ -454,9 +472,9 @@ export default function AdminApplicationsPage() {
                           <span className="font-semibold text-slate-900">
                             Proctoring Video:
                           </span>{' '}
-                          {videoUrl ? (
+                          {resolvedVideoUrl ? (
                             <a
-                              href={videoUrl}
+                              href={resolvedVideoUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="text-blue-700 underline"
