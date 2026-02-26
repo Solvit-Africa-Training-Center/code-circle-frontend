@@ -60,6 +60,9 @@ export default function Footer(){
             <a href="#" className="text-slate-400 hover:text-white">Twitter</a>
           </div>
         </div>
+        <div className="mt-3 text-center text-xs text-slate-400">
+          Powered by Solvit Africa
+        </div>
       </div>
     </footer>
   );
